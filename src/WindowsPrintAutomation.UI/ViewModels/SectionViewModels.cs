@@ -290,7 +290,16 @@ public class OrderItemDraft : ViewModelBase
     private string? _paperTray = "درج تلقائي";
 
     public Book Book { get => _book; set => SetProperty(ref _book, value); }
-    public int Copies { get => _copies; set { SetProperty(ref _copies, value); OnPropertyChanged(nameof(EstimatedSheets)); } }
+    public int Copies
+    {
+        get => _copies;
+        set
+        {
+            if (value < 1) value = 1;
+            SetProperty(ref _copies, value);
+            OnPropertyChanged(nameof(EstimatedSheets));
+        }
+    }
     public PaperSizeOption PaperSize { get => _paperSize; set => SetProperty(ref _paperSize, value); }
     public PrintDuplexOption Duplex { get => _duplex; set { SetProperty(ref _duplex, value); OnPropertyChanged(nameof(EstimatedSheets)); } }
     public PrintColorOption ColorMode { get => _colorMode; set => SetProperty(ref _colorMode, value); }
@@ -310,6 +319,16 @@ public class OrderItemDraft : ViewModelBase
     {
         _book = book;
     }
+
+    public void IncrementCopies()
+    {
+        Copies++;
+    }
+
+    public void DecrementCopies()
+    {
+        if (Copies > 1) Copies--;
+    }
 }
 
 public class OrdersViewModel : ViewModelBase
@@ -323,11 +342,15 @@ public class OrdersViewModel : ViewModelBase
     private string _searchQuery = string.Empty;
     private Order? _selectedOrder;
 
-    // Wizard
+    // Wizard / Multi-Book Creation
     private Customer? _selectedCustomer;
     private string _orderNotes = string.Empty;
     private DateTime? _deliveryDate;
     private string? _selectedPrinterName;
+
+    private string _catalogSearch = string.Empty;
+    private string _catalogGrade = "الكل";
+    private string _catalogSubject = "الكل";
 
     public string SearchQuery { get => _searchQuery; set { SetProperty(ref _searchQuery, value); _ = LoadOrdersAsync(); } }
     public Order? SelectedOrder { get => _selectedOrder; set => SetProperty(ref _selectedOrder, value); }
@@ -336,11 +359,48 @@ public class OrdersViewModel : ViewModelBase
     public DateTime? DeliveryDate { get => _deliveryDate; set => SetProperty(ref _deliveryDate, value); }
     public string? SelectedPrinterName { get => _selectedPrinterName; set => SetProperty(ref _selectedPrinterName, value); }
 
+    public string CatalogSearch
+    {
+        get => _catalogSearch;
+        set
+        {
+            if (SetProperty(ref _catalogSearch, value))
+                ApplyCatalogFilter();
+        }
+    }
+
+    public string CatalogGrade
+    {
+        get => _catalogGrade;
+        set
+        {
+            if (SetProperty(ref _catalogGrade, value))
+                ApplyCatalogFilter();
+        }
+    }
+
+    public string CatalogSubject
+    {
+        get => _catalogSubject;
+        set
+        {
+            if (SetProperty(ref _catalogSubject, value))
+                ApplyCatalogFilter();
+        }
+    }
+
     public ObservableCollection<Order> Orders { get; } = new();
     public ObservableCollection<OrderItemDraft> DraftItems { get; } = new();
     public ObservableCollection<Customer> AvailableCustomers { get; } = new();
     public ObservableCollection<Printer> AvailablePrinters { get; } = new();
 
+    public ObservableCollection<Book> AvailableBooks { get; } = new();
+    public ObservableCollection<Book> FilteredBooks { get; } = new();
+    public ObservableCollection<string> CatalogGrades { get; } = new();
+    public ObservableCollection<string> CatalogSubjects { get; } = new();
+
+    public int TotalDraftBooks => DraftItems.Count;
+    public int TotalDraftCopies => DraftItems.Sum(i => i.Copies);
     public int TotalDraftSheets => DraftItems.Sum(i => i.EstimatedSheets);
 
     public OrdersViewModel(IOrderService orderService, ICustomerService customerService, ILibraryService libraryService, IPrinterProfileService printerProfileService, MainViewModel mainVM)
@@ -364,6 +424,7 @@ public class OrdersViewModel : ViewModelBase
         DraftItems.Clear();
         OrderNotes = string.Empty;
         DeliveryDate = null;
+        CatalogSearch = string.Empty;
 
         AvailableCustomers.Clear();
         var customers = await _customerService.SearchCustomersAsync(string.Empty);
@@ -374,17 +435,94 @@ public class OrdersViewModel : ViewModelBase
         var printers = await _printerProfileService.GetPrintersAsync();
         foreach (var p in printers) AvailablePrinters.Add(p);
         SelectedPrinterName = AvailablePrinters.FirstOrDefault()?.WindowsPrinterName;
+
+        await LoadCatalogBooksAsync();
+        NotifyDraftTotals();
+    }
+
+    public async Task LoadCatalogBooksAsync()
+    {
+        AvailableBooks.Clear();
+        var books = await _libraryService.GetBooksAsync();
+        foreach (var b in books) AvailableBooks.Add(b);
+
+        CatalogGrades.Clear();
+        CatalogGrades.Add("الكل");
+        var grades = await _libraryService.GetGradesAsync();
+        foreach (var g in grades) CatalogGrades.Add(g);
+
+        CatalogSubjects.Clear();
+        CatalogSubjects.Add("الكل");
+        var subjects = await _libraryService.GetSubjectsAsync();
+        foreach (var s in subjects) CatalogSubjects.Add(s);
+
+        _catalogGrade = "الكل";
+        _catalogSubject = "الكل";
+        OnPropertyChanged(nameof(CatalogGrade));
+        OnPropertyChanged(nameof(CatalogSubject));
+
+        ApplyCatalogFilter();
+    }
+
+    public void ApplyCatalogFilter()
+    {
+        FilteredBooks.Clear();
+        var q = AvailableBooks.AsEnumerable();
+
+        if (!string.IsNullOrWhiteSpace(CatalogGrade) && CatalogGrade != "الكل")
+            q = q.Where(b => b.Grade == CatalogGrade);
+
+        if (!string.IsNullOrWhiteSpace(CatalogSubject) && CatalogSubject != "الكل")
+            q = q.Where(b => b.Subject == CatalogSubject);
+
+        if (!string.IsNullOrWhiteSpace(CatalogSearch))
+        {
+            var search = CatalogSearch.Trim();
+            q = q.Where(b => (b.Title != null && b.Title.Contains(search, StringComparison.OrdinalIgnoreCase))
+                          || (b.Subject != null && b.Subject.Contains(search, StringComparison.OrdinalIgnoreCase))
+                          || (b.Grade != null && b.Grade.Contains(search, StringComparison.OrdinalIgnoreCase)));
+        }
+
+        foreach (var b in q)
+        {
+            FilteredBooks.Add(b);
+        }
     }
 
     public void AddBookToDraft(Book book)
     {
-        DraftItems.Add(new OrderItemDraft(book));
-        OnPropertyChanged(nameof(TotalDraftSheets));
+        var existing = DraftItems.FirstOrDefault(i => i.Book.Id == book.Id);
+        if (existing != null)
+        {
+            existing.Copies++;
+        }
+        else
+        {
+            var draft = new OrderItemDraft(book);
+            draft.PropertyChanged += (s, e) => NotifyDraftTotals();
+            DraftItems.Add(draft);
+        }
+        NotifyDraftTotals();
+    }
+
+    public void AddAllFilteredBooksToDraft()
+    {
+        foreach (var book in FilteredBooks.ToList())
+        {
+            AddBookToDraft(book);
+        }
     }
 
     public void RemoveDraftItem(OrderItemDraft item)
     {
         DraftItems.Remove(item);
+        NotifyDraftTotals();
+    }
+
+    public void NotifyDraftTotals()
+    {
+        OnPropertyChanged(nameof(TotalDraftBooks));
+        OnPropertyChanged(nameof(TotalDraftCopies));
         OnPropertyChanged(nameof(TotalDraftSheets));
     }
 
@@ -419,6 +557,7 @@ public class OrdersViewModel : ViewModelBase
         var created = await _orderService.CreateOrderAsync(order, SelectedPrinterName);
         await LoadOrdersAsync();
         DraftItems.Clear();
+        NotifyDraftTotals();
         return created;
     }
 }

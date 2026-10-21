@@ -1,3 +1,4 @@
+using System;
 using System.Windows;
 using System.Windows.Controls;
 using WindowsPrintAutomation.Core.Domain.Entities;
@@ -17,19 +18,6 @@ public partial class OrdersView : UserControl
         if (DataContext is OrdersViewModel vm)
         {
             await vm.PrepareNewOrderAsync();
-
-            // Load available books for the combo
-            var parent = Application.Current.MainWindow?.DataContext as MainViewModel;
-            if (parent != null)
-            {
-                await parent.LibraryVM.LoadBooksAsync();
-                CmbAvailableBooks.ItemsSource = parent.LibraryVM.Books;
-                if (parent.LibraryVM.Books.Count > 0)
-                {
-                    CmbAvailableBooks.SelectedIndex = 0;
-                }
-            }
-
             NewOrderModal.Visibility = Visibility.Visible;
         }
     }
@@ -39,11 +27,37 @@ public partial class OrdersView : UserControl
         NewOrderModal.Visibility = Visibility.Collapsed;
     }
 
-    private void BtnAddBookToDraft_Click(object sender, RoutedEventArgs e)
+    private void BtnAddBookItem_Click(object sender, RoutedEventArgs e)
     {
-        if (DataContext is OrdersViewModel vm && CmbAvailableBooks.SelectedItem is Book selectedBook)
+        if (sender is Button btn && btn.DataContext is Book book && DataContext is OrdersViewModel vm)
         {
-            vm.AddBookToDraft(selectedBook);
+            vm.AddBookToDraft(book);
+        }
+    }
+
+    private void BtnAddAllFiltered_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is OrdersViewModel vm)
+        {
+            vm.AddAllFilteredBooksToDraft();
+        }
+    }
+
+    private void BtnIncrementCopies_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button btn && btn.DataContext is OrderItemDraft draft && DataContext is OrdersViewModel vm)
+        {
+            draft.IncrementCopies();
+            vm.NotifyDraftTotals();
+        }
+    }
+
+    private void BtnDecrementCopies_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button btn && btn.DataContext is OrderItemDraft draft && DataContext is OrdersViewModel vm)
+        {
+            draft.DecrementCopies();
+            vm.NotifyDraftTotals();
         }
     }
 

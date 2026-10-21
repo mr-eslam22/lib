@@ -9,7 +9,9 @@
         WindowStartupLocation="CenterScreen"
         FlowDirection="RightToLeft"
         Background="{StaticResource BgPrimary}"
-        Foreground="{StaticResource TextPrimary}">
+        Foreground="{StaticResource TextPrimary}"
+        WindowStyle="None"
+        ResizeMode="CanResizeWithGrip">
 
     <Window.Resources>
         <DataTemplate DataType="{x:Type vm:DashboardViewModel}">
@@ -51,7 +53,8 @@
         <Border Grid.Column="0" Background="{StaticResource BgSecondary}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,1,0">
             <DockPanel LastChildFill="True">
                 <!-- Branding Header -->
-                <Border DockPanel.Dock="Top" Padding="20,24" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1">
+                <Border DockPanel.Dock="Top" Padding="20,20" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1"
+                        MouseLeftButtonDown="TitleBar_MouseLeftButtonDown" Background="Transparent">
                     <StackPanel>
                         <TextBlock Text="مطبعة الكتب المدرسية" FontSize="18" FontWeight="Bold" Foreground="{StaticResource AccentBrush}" />
                         <TextBlock Text="إدارة الطباعة وماكينات HP وKyocera" FontSize="11" Foreground="{StaticResource TextMuted}" Margin="0,4,0,0" />
@@ -101,11 +104,16 @@
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
 
-            <!-- Top Header -->
-            <Border Grid.Row="0" Background="{StaticResource BgSecondary}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" Padding="24,0">
+            <!-- Top Header & Custom Title Bar -->
+            <Border Grid.Row="0" Background="{StaticResource BgSecondary}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" Padding="20,0,12,0"
+                    MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
                 <Grid VerticalAlignment="Center">
                     <Grid.ColumnDefinitions>
+                        <!-- Section title and status -->
                         <ColumnDefinition Width="*" />
+                        <!-- Alert pill -->
+                        <ColumnDefinition Width="Auto" />
+                        <!-- Window Caption Controls (Minimize, Maximize, Close) -->
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
 
@@ -117,11 +125,29 @@
                     </StackPanel>
 
                     <!-- Alert pill if crash / recovery required -->
-                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                        <Border Background="#451A03" BorderBrush="{StaticResource WarningBrush}" BorderThickness="1" CornerRadius="8" Padding="12,6" Margin="0,0,12,0"
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,16,0">
+                        <Border Background="#451A03" BorderBrush="{StaticResource WarningBrush}" BorderThickness="1" CornerRadius="8" Padding="12,6"
                                 Visibility="{Binding HasActiveRecoveryAlert, Converter={StaticResource BoolToVis}}">
                             <TextBlock Text="⚠️ يلزم التحقق من مهام متوقفة بعد إعادة التشغيل" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource WarningBrush}" />
                         </Border>
+                    </StackPanel>
+
+                    <!-- Window Caption Controls -->
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                        <!-- Minimize Button -->
+                        <Button Style="{StaticResource WindowCaptionButton}" Click="BtnMinimize_Click" ToolTip="تصغير النافذة">
+                            <TextBlock Text="—" FontSize="13" FontWeight="Bold" Foreground="{StaticResource TextMuted}" />
+                        </Button>
+
+                        <!-- Maximize / Restore Button -->
+                        <Button x:Name="BtnMaximizeRestore" Style="{StaticResource WindowCaptionButton}" Click="BtnMaximize_Click" ToolTip="تكبير / استعادة">
+                            <TextBlock x:Name="TxtMaximizeIcon" Text="🗖" FontSize="13" Foreground="{StaticResource TextMuted}" />
+                        </Button>
+
+                        <!-- Close Button -->
+                        <Button Style="{StaticResource WindowCloseButton}" Click="BtnClose_Click" ToolTip="إغلاق البرنامج">
+                            <TextBlock Text="✕" FontSize="14" FontWeight="Bold" Foreground="{StaticResource TextMuted}" />
+                        </Button>
                     </StackPanel>
                 </Grid>
             </Border>

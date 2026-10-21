@@ -59,6 +59,13 @@
                     <DataGridTextColumn Header="عدد الصفحات" Binding="{Binding PageCount}" Width="110" />
                     <DataGridTextColumn Header="اسم الملف" Binding="{Binding FileName}" Width="200" />
                     <DataGridTextColumn Header="المسار الأصلي على القرص" Binding="{Binding FilePath}" Width="*" />
+                    <DataGridTemplateColumn Header="إجراء سريع" Width="130">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <Button Content="🛒 طلب طباعة" Style="{StaticResource PrimaryButton}" Padding="10,4" FontSize="11" Click="BtnOrderBook_Click" />
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
                 </DataGrid.Columns>
             </DataGrid>
         </Border>

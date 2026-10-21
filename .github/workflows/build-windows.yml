@@ -1,0 +1,81 @@
+name: Build & Test Windows Desktop App
+
+on:
+  push:
+    branches: [ main, master, '**' ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore NuGet Packages
+        run: dotnet restore WindowsPrintAutomation.sln
+
+      - name: Run Automated Tests
+        run: dotnet test WindowsPrintAutomation.sln -c Release --no-restore --verbosity normal --logger "trx;LogFileName=test_results.trx"
+
+      - name: Publish Windows x64 Application
+        run: |
+          dotnet publish src/WindowsPrintAutomation.UI/WindowsPrintAutomation.UI.csproj `
+            -c Release `
+            -r win-x64 `
+            --self-contained true `
+            --no-restore `
+            -o publish/win-x64
+
+      - name: Create Artifacts Directory
+        run: mkdir artifacts -Force
+
+      - name: Build Inno Setup Installer
+        run: |
+          $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          if (Test-Path $iscc) {
+            & $iscc installer\setup.iss
+          } else {
+            Write-Warning "Inno Setup compiler not found at default location. Skipping installer compilation."
+          }
+
+      - name: Package Portable ZIP Archive
+        run: |
+          Compress-Archive -Path publish\win-x64\* -DestinationPath artifacts\WindowsPrintAutomation-Portable-win-x64.zip -Force
+
+      - name: Upload Test Results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: TestResults
+          path: '**/TestResults/*.trx'
+          retention-days: 14
+
+      - name: Upload Windows Installer & Portable Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: WindowsPrintAutomation-Release-win-x64
+          path: artifacts/*
+          retention-days: 30
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/WindowsPrintAutomation-Setup.exe
+            artifacts/WindowsPrintAutomation-Portable-win-x64.zip
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

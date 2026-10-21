@@ -1,0 +1,106 @@
+<UserControl x:Class="WindowsPrintAutomation.UI.Views.DashboardView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             FlowDirection="RightToLeft">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- Metric Stat Cards -->
+        <UniformGrid Grid.Row="0" Columns="4" Margin="0,0,0,24">
+            <!-- Card 1: Books in Library -->
+            <Border Style="{StaticResource CardPanel}" Margin="0,0,16,0">
+                <StackPanel>
+                    <TextBlock Text="إجمالي الكتب المفهرسة" FontSize="13" Foreground="{StaticResource TextMuted}" />
+                    <TextBlock Text="{Binding TotalBooksInLibrary}" FontSize="28" FontWeight="Bold" Foreground="White" Margin="0,8,0,0" />
+                    <TextBlock Text="ملفات PDF جاهزة للطباعة" FontSize="11" Foreground="{StaticResource SuccessBrush}" Margin="0,4,0,0" />
+                </StackPanel>
+            </Border>
+
+            <!-- Card 2: Queued Jobs -->
+            <Border Style="{StaticResource CardPanel}" Margin="0,0,16,0">
+                <StackPanel>
+                    <TextBlock Text="المهام في الطابور" FontSize="13" Foreground="{StaticResource TextMuted}" />
+                    <TextBlock Text="{Binding QueuedJobsCount}" FontSize="28" FontWeight="Bold" Foreground="{StaticResource AccentBrush}" Margin="0,8,0,0" />
+                    <TextBlock Text="في انتظار الإرسال للماكينة" FontSize="11" Foreground="{StaticResource TextMuted}" Margin="0,4,0,0" />
+                </StackPanel>
+            </Border>
+
+            <!-- Card 3: Active Printing -->
+            <Border Style="{StaticResource CardPanel}" Margin="0,0,16,0">
+                <StackPanel>
+                    <TextBlock Text="قيد الإرسال والمعالجة" FontSize="13" Foreground="{StaticResource TextMuted}" />
+                    <TextBlock Text="{Binding PrintingJobsCount}" FontSize="28" FontWeight="Bold" Foreground="#38BDF8" Margin="0,8,0,0" />
+                    <TextBlock Text="داخل Windows Spooler" FontSize="11" Foreground="{StaticResource TextMuted}" Margin="0,4,0,0" />
+                </StackPanel>
+            </Border>
+
+            <!-- Card 4: Needs Verification / Recovery -->
+            <Border Style="{StaticResource CardPanel}">
+                <StackPanel>
+                    <TextBlock Text="يلزم الاستعادة أو التأكيد" FontSize="13" Foreground="{StaticResource TextMuted}" />
+                    <TextBlock Text="{Binding RecoveryRequiredCount}" FontSize="28" FontWeight="Bold" Foreground="{StaticResource WarningBrush}" Margin="0,8,0,0" />
+                    <TextBlock Text="نسخ تحتاج تأكيد فيزيائي يدوي" FontSize="11" Foreground="{StaticResource WarningBrush}" Margin="0,4,0,0" />
+                </StackPanel>
+            </Border>
+        </UniformGrid>
+
+        <!-- Lower Grid: Printers & Recent Jobs -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="1*" />
+                <ColumnDefinition Width="1.5*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Printers Status Column -->
+            <Border Grid.Column="0" Style="{StaticResource CardPanel}" Margin="0,0,16,0">
+                <DockPanel LastChildFill="True">
+                    <TextBlock DockPanel.Dock="Top" Text="حالة ماكينات الطباعة المتصلة" FontSize="16" FontWeight="Bold" Margin="0,0,0,16" />
+                    <ItemsControl ItemsSource="{Binding Printers}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Background="{StaticResource BgPrimary}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="12" Margin="0,0,0,10">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0">
+                                            <TextBlock Text="{Binding WindowsPrinterName}" FontWeight="Bold" FontSize="14" />
+                                            <TextBlock Text="{Binding Manufacturer}" FontSize="12" Foreground="{StaticResource TextMuted}" Margin="0,2,0,0" />
+                                            <TextBlock Text="{Binding CurrentStatusText}" FontSize="12" Foreground="{StaticResource AccentBrush}" Margin="0,4,0,0" />
+                                        </StackPanel>
+                                        <Border Grid.Column="1" VerticalAlignment="Center" CornerRadius="6" Padding="8,4"
+                                                Background="{Binding IsOnline, Converter={x:Static BooleanToVisibilityConverter.Instance}}">
+                                            <TextBlock Text="متصلة" FontSize="11" FontWeight="Bold" Foreground="{StaticResource SuccessBrush}" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </DockPanel>
+            </Border>
+
+            <!-- Recent Jobs Column -->
+            <Border Grid.Column="1" Style="{StaticResource CardPanel}">
+                <DockPanel LastChildFill="True">
+                    <TextBlock DockPanel.Dock="Top" Text="أحدث مهام الطباعة والتحقق الفيزيائي" FontSize="16" FontWeight="Bold" Margin="0,0,0,16" />
+                    <DataGrid ItemsSource="{Binding RecentJobs}">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="رقم المهمة" Binding="{Binding JobNumber}" Width="130" />
+                            <DataGridTextColumn Header="الماكينة" Binding="{Binding PrinterName}" Width="150" />
+                            <DataGridTextColumn Header="المطلوب" Binding="{Binding CopiesRequested}" Width="70" />
+                            <DataGridTextColumn Header="المؤكد" Binding="{Binding CopiesVerified}" Width="70" />
+                            <DataGridTextColumn Header="المتبقي" Binding="{Binding CopiesRemaining}" Width="70" />
+                            <DataGridTextColumn Header="الحالة" Binding="{Binding Status}" Width="110" />
+                            <DataGridTextColumn Header="التأكيد" Binding="{Binding VerificationStatus}" Width="*" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </DockPanel>
+            </Border>
+        </Grid>
+    </Grid>
+</UserControl>

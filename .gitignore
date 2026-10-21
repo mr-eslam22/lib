@@ -1,0 +1,27 @@
+# Windows & Visual Studio
+bin/
+obj/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+.vs/
+*.dotCover
+
+# SQLite
+*.db
+*.db-shm
+*.db-wal
+*.bak
+
+# Build Artifacts
+publish/
+dist/
+artifacts/
+TestResults/
+*.msi
+*.exe.config
+
+# Logs
+logs/
+*.log

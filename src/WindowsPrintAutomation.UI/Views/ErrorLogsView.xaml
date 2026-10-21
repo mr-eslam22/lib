@@ -1,0 +1,52 @@
+<UserControl x:Class="WindowsPrintAutomation.UI.Views.ErrorLogsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             FlowDirection="RightToLeft">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Filter Bar -->
+        <Border Grid.Row="0" Style="{StaticResource CardPanel}" Margin="0,0,0,16">
+            <Grid>
+                <TextBlock Text="سجل الأخطاء والتدقيق الدائم (Paper Jam, Offline, Spooler Errors)" FontSize="16" FontWeight="Bold" VerticalAlignment="Center" />
+                <CheckBox Content="عرض الأخطاء غير المعالجة فقط" IsChecked="{Binding UnresolvedOnly}" HorizontalAlignment="Left" VerticalAlignment="Center" Foreground="{StaticResource TextPrimary}" />
+            </Grid>
+        </Border>
+
+        <!-- Error Logs DataGrid -->
+        <Border Grid.Row="1" Style="{StaticResource CardPanel}" Margin="0,0,0,16">
+            <DataGrid ItemsSource="{Binding ErrorLogs}" SelectedItem="{Binding SelectedLog}">
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="الوقت" Binding="{Binding Timestamp, StringFormat=\{0:yyyy/MM/dd HH:mm:ss\}}" Width="150" />
+                    <DataGridTextColumn Header="الماكينة" Binding="{Binding PrinterName}" Width="150" />
+                    <DataGridTextColumn Header="نوع الخطأ" Binding="{Binding ErrorType}" Width="130" />
+                    <DataGridTextColumn Header="المصدر" Binding="{Binding ErrorSource}" Width="120" />
+                    <DataGridTextColumn Header="رسالة الخطأ" Binding="{Binding ErrorMessage}" Width="250" />
+                    <DataGridTextColumn Header="إجراء النظام" Binding="{Binding SystemActionTaken}" Width="200" />
+                    <DataGridCheckBoxColumn Header="تمت المعالجة" Binding="{Binding IsResolved}" Width="*" />
+                </DataGrid.Columns>
+            </DataGrid>
+        </Border>
+
+        <!-- Resolution Box -->
+        <Border Grid.Row="2" Style="{StaticResource CardPanel}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                    <TextBlock Text="إجراء الموظف لمعالجة الخطأ المحدد (مثال: إزالة الورق المحشور يدويًا، إعادة تزويد درج 2 بالورق):" Foreground="{StaticResource TextMuted}" Margin="0,0,0,4" />
+                    <TextBox Text="{Binding ResolutionNotes, UpdateSourceTrigger=PropertyChanged}" />
+                </StackPanel>
+
+                <Button Grid.Column="1" Content="✔️  تسجيل المعالجة" Style="{StaticResource PrimaryButton}" VerticalAlignment="Bottom" Click="BtnResolve_Click" />
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

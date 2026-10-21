@@ -155,15 +155,22 @@ public class DatabaseService : IDisposable
                 WindowsPrinterName TEXT NOT NULL UNIQUE,
                 Manufacturer TEXT NOT NULL,
                 Model TEXT NOT NULL,
+                DriverName TEXT NOT NULL DEFAULT '',
+                PortName TEXT NOT NULL DEFAULT '',
+                AdapterFamily TEXT NOT NULL DEFAULT 'GenericWindowsSpooler',
                 ConnectionAddress TEXT,
                 IsOnline INTEGER NOT NULL DEFAULT 1,
                 HasError INTEGER NOT NULL DEFAULT 0,
+                IsActive INTEGER NOT NULL DEFAULT 1,
                 CurrentStatusText TEXT NOT NULL,
                 SupportedPaperSizes TEXT NOT NULL,
                 SupportsDuplex INTEGER NOT NULL DEFAULT 1,
                 SupportsColor INTEGER NOT NULL DEFAULT 0,
                 AvailableTrays TEXT NOT NULL,
+                CapabilitiesJson TEXT,
                 LastSeenAt TEXT NOT NULL,
+                LastTestedAt TEXT,
+                TestResultStatus TEXT,
                 LastErrorMessage TEXT,
                 IsPaused INTEGER NOT NULL DEFAULT 0
             );
@@ -172,6 +179,7 @@ public class DatabaseService : IDisposable
                 Id INTEGER PRIMARY KEY AUTOINCREMENT,
                 PrinterId INTEGER NOT NULL,
                 ProfileName TEXT NOT NULL,
+                TargetBookType TEXT NOT NULL DEFAULT 'عام',
                 PaperSize INTEGER NOT NULL DEFAULT 0,
                 Duplex INTEGER NOT NULL DEFAULT 1,
                 ColorMode INTEGER NOT NULL DEFAULT 0,
@@ -252,6 +260,33 @@ public class DatabaseService : IDisposable
             );
         ";
         cmd.ExecuteNonQuery();
+
+        // Safe column migrations for existing databases
+        string[] migrations = new[]
+        {
+            "ALTER TABLE Printers ADD COLUMN DriverName TEXT NOT NULL DEFAULT '';",
+            "ALTER TABLE Printers ADD COLUMN PortName TEXT NOT NULL DEFAULT '';",
+            "ALTER TABLE Printers ADD COLUMN AdapterFamily TEXT NOT NULL DEFAULT 'GenericWindowsSpooler';",
+            "ALTER TABLE Printers ADD COLUMN IsActive INTEGER NOT NULL DEFAULT 1;",
+            "ALTER TABLE Printers ADD COLUMN CapabilitiesJson TEXT;",
+            "ALTER TABLE Printers ADD COLUMN LastTestedAt TEXT;",
+            "ALTER TABLE Printers ADD COLUMN TestResultStatus TEXT;",
+            "ALTER TABLE PrinterProfiles ADD COLUMN TargetBookType TEXT NOT NULL DEFAULT 'عام';"
+        };
+
+        foreach (var mig in migrations)
+        {
+            try
+            {
+                using var migCmd = conn.CreateCommand();
+                migCmd.CommandText = mig;
+                migCmd.ExecuteNonQuery();
+            }
+            catch
+            {
+                // Column already exists, safe to ignore
+            }
+        }
     }
 
     public string CreateBackup(string? destinationFolder = null)

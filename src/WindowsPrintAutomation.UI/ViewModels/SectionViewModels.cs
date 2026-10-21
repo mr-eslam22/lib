@@ -417,19 +417,55 @@ public class PrintersViewModel : ViewModelBase
 {
     private readonly IPrinterProfileService _printerProfileService;
     private readonly IPrintEngine _printEngine;
+    private readonly IPrinterDiscoveryService _discoveryService;
+    private readonly IRecoveryService _recoveryService;
+
     private Printer? _selectedPrinter;
     private string _statusMessage = string.Empty;
+    private bool _isTesting;
+    private ConnectionTestResult? _currentTestResult;
 
-    public Printer? SelectedPrinter { get => _selectedPrinter; set { SetProperty(ref _selectedPrinter, value); _ = LoadProfilesAsync(); } }
+    public Printer? SelectedPrinter
+    {
+        get => _selectedPrinter;
+        set
+        {
+            SetProperty(ref _selectedPrinter, value);
+            _ = LoadProfilesAsync();
+            _ = LoadMachineErrorsAsync();
+            CurrentTestResult = null;
+        }
+    }
+
     public string StatusMessage { get => _statusMessage; set => SetProperty(ref _statusMessage, value); }
+    public bool IsTesting { get => _isTesting; set => SetProperty(ref _isTesting, value); }
+    public ConnectionTestResult? CurrentTestResult { get => _currentTestResult; set => SetProperty(ref _currentTestResult, value); }
 
     public ObservableCollection<Printer> Printers { get; } = new();
     public ObservableCollection<PrinterProfile> Profiles { get; } = new();
+    public ObservableCollection<ErrorLog> MachineErrors { get; } = new();
+    public ObservableCollection<string> ConfirmedCapabilities { get; } = new();
+    public ObservableCollection<string> UnconfirmedCapabilities { get; } = new();
+    public ObservableCollection<string> UnsupportedCapabilities { get; } = new();
+    public ObservableCollection<string> AvailableAdapters { get; } = new()
+    {
+        "GenericWindowsSpooler",
+        "HpEnterprise",
+        "KyoceraTaskAlfa",
+        "NetworkSnmp",
+        "FakeSimulated"
+    };
 
-    public PrintersViewModel(IPrinterProfileService printerProfileService, IPrintEngine printEngine)
+    public PrintersViewModel(
+        IPrinterProfileService printerProfileService,
+        IPrintEngine printEngine,
+        IPrinterDiscoveryService? discoveryService = null,
+        IRecoveryService? recoveryService = null)
     {
         _printerProfileService = printerProfileService;
         _printEngine = printEngine;
+        _discoveryService = discoveryService ?? new PrinterDiscoveryService();
+        _recoveryService = recoveryService ?? new RecoveryService(new DatabaseService());
     }
 
     public async Task LoadPrintersAsync()
@@ -450,6 +486,110 @@ public class PrintersViewModel : ViewModelBase
         }
     }
 
+    public async Task LoadMachineErrorsAsync()
+    {
+        MachineErrors.Clear();
+        if (SelectedPrinter != null)
+        {
+            var logs = await _recoveryService.GetErrorLogsAsync(printerName: SelectedPrinter.WindowsPrinterName, limit: 30);
+            foreach (var l in logs) MachineErrors.Add(l);
+        }
+    }
+
+    public async Task DiscoverPrintersAsync()
+    {
+        StatusMessage = "جاري اكتشاف طابعات Windows وتعريفاتها المثبتة...";
+        try
+        {
+            var discovered = await _discoveryService.DiscoverPrintersAsync();
+            int addedCount = 0;
+
+            foreach (var d in discovered)
+            {
+                var existing = await _printerProfileService.GetPrinterByNameAsync(d.Name);
+                if (existing == null)
+                {
+                    var newPrinter = new Printer
+                    {
+                        WindowsPrinterName = d.Name,
+                        Manufacturer = d.Manufacturer,
+                        Model = d.Model,
+                        DriverName = d.DriverName,
+                        PortName = d.PortName,
+                        ConnectionAddress = d.ConnectionAddress,
+                        AdapterFamily = d.RecommendedAdapterFamily,
+                        IsOnline = true,
+                        SupportsDuplex = true,
+                        SupportedPaperSizes = "A4,B5",
+                        AvailableTrays = "درج تلقائي,درج 1,درج 2"
+                    };
+                    await _printerProfileService.SaveOrUpdatePrinterAsync(newPrinter);
+                    addedCount++;
+                }
+                else
+                {
+                    existing.DriverName = d.DriverName;
+                    existing.PortName = d.PortName;
+                    if (string.IsNullOrEmpty(existing.ConnectionAddress)) existing.ConnectionAddress = d.ConnectionAddress;
+                    await _printerProfileService.SaveOrUpdatePrinterAsync(existing);
+                }
+            }
+
+            await LoadPrintersAsync();
+            StatusMessage = $"اكتمل الفحص: تم اكتشاف {discovered.Count} طابعة، وإضافة {addedCount} ماكينة جديدة.";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"خطأ أثناء اكتشاف الطابعات: {ex.Message}";
+        }
+    }
+
+    public async Task RunConnectionAndCapabilitiesTestAsync()
+    {
+        if (SelectedPrinter == null) return;
+
+        IsTesting = true;
+        StatusMessage = $"جاري فحص الاتصال وقدرات التعريف لماكينة '{SelectedPrinter.WindowsPrinterName}'...";
+        ConfirmedCapabilities.Clear();
+        UnconfirmedCapabilities.Clear();
+        UnsupportedCapabilities.Clear();
+
+        try
+        {
+            var adapter = _printEngine.GetAdapterForPrinter(SelectedPrinter.WindowsPrinterName);
+            var testResult = await adapter.TestConnectionAsync(SelectedPrinter.WindowsPrinterName, SelectedPrinter.ConnectionAddress);
+            var probeReport = adapter.ProbeCapabilities(SelectedPrinter.WindowsPrinterName, SelectedPrinter.DriverName);
+
+            testResult.CapabilitiesReport = probeReport;
+            CurrentTestResult = testResult;
+
+            foreach (var item in probeReport.ConfirmedCapabilitiesList) ConfirmedCapabilities.Add(item);
+            foreach (var item in probeReport.UnconfirmedCapabilitiesList) UnconfirmedCapabilities.Add(item);
+            foreach (var item in probeReport.UnsupportedCapabilitiesList) UnsupportedCapabilities.Add(item);
+
+            SelectedPrinter.LastTestedAt = DateTime.UtcNow;
+            SelectedPrinter.TestResultStatus = testResult.IsSuccess ? "ناجح" : "فشل الاتصال";
+            SelectedPrinter.IsOnline = testResult.IsSuccess;
+
+            await _printerProfileService.SaveTestResultAsync(
+                SelectedPrinter.WindowsPrinterName,
+                testResult.IsSuccess,
+                testResult.StatusMessage);
+
+            StatusMessage = testResult.IsSuccess
+                ? $"✅ اكتمل الاختبار بنجاح: زمن الاستجابة {testResult.LatencyMs}ms — تم تأكيد {probeReport.ConfirmedCapabilitiesList.Count} إعداد."
+                : $"❌ فشل اختبار الاتصال: {testResult.StatusMessage}";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"فشل إجراء الفحص: {ex.Message}";
+        }
+        finally
+        {
+            IsTesting = false;
+        }
+    }
+
     public async Task TogglePausePrinterAsync(Printer printer)
     {
         if (printer.IsPaused)
@@ -466,6 +606,45 @@ public class PrintersViewModel : ViewModelBase
         }
         await _printerProfileService.SaveOrUpdatePrinterAsync(printer);
         await LoadPrintersAsync();
+    }
+
+    public async Task ToggleActivePrinterAsync(Printer printer)
+    {
+        printer.IsActive = !printer.IsActive;
+        await _printerProfileService.SetPrinterActiveAsync(printer.Id, printer.IsActive);
+        await LoadPrintersAsync();
+    }
+
+    public async Task SavePrinterAsync(Printer printer)
+    {
+        await _printerProfileService.SaveOrUpdatePrinterAsync(printer);
+        await LoadPrintersAsync();
+        StatusMessage = "تم حفظ تعديلات الماكينة بنجاح.";
+    }
+
+    public async Task DeletePrinterAsync(Printer printer)
+    {
+        await _printerProfileService.DeletePrinterAsync(printer.Id);
+        await LoadPrintersAsync();
+        StatusMessage = "تم حذف الماكينة بنجاح.";
+    }
+
+    public async Task AddProfileAsync(string profileName, string targetBookType, PaperSizeOption size, PrintDuplexOption duplex, PrintColorOption color, string? tray)
+    {
+        if (SelectedPrinter == null) return;
+        var profile = new PrinterProfile
+        {
+            PrinterId = SelectedPrinter.Id,
+            ProfileName = profileName,
+            TargetBookType = string.IsNullOrWhiteSpace(targetBookType) ? "عام" : targetBookType,
+            PaperSize = size,
+            Duplex = duplex,
+            ColorMode = color,
+            PaperTray = tray,
+            IsDefault = Profiles.Count == 0
+        };
+        await _printerProfileService.SaveProfileAsync(profile);
+        await LoadProfilesAsync();
     }
 }
 #endregion

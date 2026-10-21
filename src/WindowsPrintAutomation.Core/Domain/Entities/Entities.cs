@@ -81,15 +81,22 @@ public class Printer
     public string WindowsPrinterName { get; set; } = string.Empty;
     public string Manufacturer { get; set; } = string.Empty;
     public string Model { get; set; } = string.Empty;
+    public string DriverName { get; set; } = string.Empty;
+    public string PortName { get; set; } = string.Empty;
+    public string AdapterFamily { get; set; } = "GenericWindowsSpooler";
     public string? ConnectionAddress { get; set; }
     public bool IsOnline { get; set; } = true;
     public bool HasError { get; set; }
+    public bool IsActive { get; set; } = true;
     public string CurrentStatusText { get; set; } = "جاهزة";
     public string SupportedPaperSizes { get; set; } = "A4,B5";
     public bool SupportsDuplex { get; set; } = true;
     public bool SupportsColor { get; set; }
     public string AvailableTrays { get; set; } = "درج تلقائي,درج 1,درج 2";
+    public string? CapabilitiesJson { get; set; }
     public DateTime LastSeenAt { get; set; } = DateTime.UtcNow;
+    public DateTime? LastTestedAt { get; set; }
+    public string? TestResultStatus { get; set; }
     public string? LastErrorMessage { get; set; }
     public bool IsPaused { get; set; }
 }
@@ -99,6 +106,7 @@ public class PrinterProfile
     public long Id { get; set; }
     public long PrinterId { get; set; }
     public string ProfileName { get; set; } = string.Empty;
+    public string TargetBookType { get; set; } = "عام";
     public PaperSizeOption PaperSize { get; set; } = PaperSizeOption.A4;
     public PrintDuplexOption Duplex { get; set; } = PrintDuplexOption.DuplexLongEdge;
     public PrintColorOption ColorMode { get; set; } = PrintColorOption.Monochrome;

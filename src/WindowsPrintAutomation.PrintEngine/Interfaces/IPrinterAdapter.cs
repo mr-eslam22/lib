@@ -50,7 +50,13 @@ public class SpoolerJobInfo
 
 public interface IPrinterAdapter
 {
-    string AdapterName { get; }
+    string AdapterId { get; }
+    string DisplayName { get; }
+    string VendorFamily { get; }
+    string AdapterName => DisplayName;
+
+    DeviceCapabilitiesReport ProbeCapabilities(string printerName, string? driverName = null);
+    Task<ConnectionTestResult> TestConnectionAsync(string printerName, string? connectionAddress);
     Task<PrinterStatusInfo> CheckStatusAsync(string printerName);
     Task<PrintExecutionResult> SendPdfJobAsync(PrintJobRequest request);
     Task<bool> CancelJobAsync(string printerName, int spoolerJobId);

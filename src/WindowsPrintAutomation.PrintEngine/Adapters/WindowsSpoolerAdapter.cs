@@ -8,7 +8,10 @@ namespace WindowsPrintAutomation.PrintEngine.Adapters;
 
 public class WindowsSpoolerAdapter : IPrinterAdapter
 {
-    public string AdapterName => "WindowsSpoolerAdapter (Native Win32 / System.Printing)";
+    public string AdapterId => "GenericWindowsSpooler";
+    public string DisplayName => "Windows Print Spooler (المحول القياسي)";
+    public string VendorFamily => "GenericWindowsSpooler";
+    public string AdapterName => DisplayName;
 
     #region Win32 P/Invoke
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
@@ -52,6 +55,132 @@ public class WindowsSpoolerAdapter : IPrinterAdapter
     private const int JOB_CONTROL_RESTART = 4;
     private const int JOB_CONTROL_DELETE = 5;
     #endregion
+
+    public DeviceCapabilitiesReport ProbeCapabilities(string printerName, string? driverName = null)
+    {
+        var report = new DeviceCapabilitiesReport
+        {
+            PrinterName = printerName,
+            DriverName = driverName ?? string.Empty,
+            ProbedAt = DateTime.UtcNow
+        };
+
+        try
+        {
+            using var server = new LocalPrintServer();
+            using var queue = server.GetPrintQueue(printerName);
+
+            var capabilities = queue.GetPrintCapabilities();
+
+            // 1. Paper sizes
+            bool hasA4 = false;
+            bool hasB5 = false;
+            foreach (var size in capabilities.PageMediaSizeCapability)
+            {
+                var name = size.PageMediaSizeName?.ToString() ?? string.Empty;
+                if (name.Contains("ISOA4", StringComparison.OrdinalIgnoreCase) || name.Contains("A4", StringComparison.OrdinalIgnoreCase))
+                {
+                    hasA4 = true;
+                }
+                if (name.Contains("ISOB5", StringComparison.OrdinalIgnoreCase) || name.Contains("B5", StringComparison.OrdinalIgnoreCase) || name.Contains("JISB5", StringComparison.OrdinalIgnoreCase))
+                {
+                    hasB5 = true;
+                }
+            }
+
+            report.A4Support = hasA4 ? CapabilityStatus.VerifiedSupported : CapabilityStatus.UnconfirmedOrUnknown;
+            report.B5Support = hasB5 ? CapabilityStatus.VerifiedSupported : CapabilityStatus.UnconfirmedOrUnknown;
+
+            // 2. Duplex
+            bool supportsDuplex = capabilities.DuplexingCapability.Contains(Duplexing.TwoSidedLongEdge) || capabilities.DuplexingCapability.Contains(Duplexing.TwoSidedShortEdge);
+            report.DuplexSupport = supportsDuplex ? CapabilityStatus.VerifiedSupported : CapabilityStatus.VerifiedUnsupported;
+
+            // 3. Color
+            bool supportsColor = capabilities.OutputColorCapability.Contains(OutputColor.Color);
+            report.ColorSupport = supportsColor ? CapabilityStatus.VerifiedSupported : CapabilityStatus.VerifiedUnsupported;
+
+            // 4. Trays
+            foreach (var bin in capabilities.InputBinCapability)
+            {
+                var binName = bin.ToString();
+                if (!string.IsNullOrWhiteSpace(binName) && !report.ConfirmedTrays.Contains(binName))
+                {
+                    report.ConfirmedTrays.Add(binName);
+                }
+            }
+            report.HasUnconfirmedTrays = report.ConfirmedTrays.Count == 0;
+
+            if (report.A4Support == CapabilityStatus.VerifiedSupported) report.ConfirmedCapabilitiesList.Add("مقاس A4 مؤكد");
+            if (report.B5Support == CapabilityStatus.VerifiedSupported) report.ConfirmedCapabilitiesList.Add("مقاس B5 مؤكد");
+            else report.UnconfirmedCapabilitiesList.Add("مقاس B5 غير مؤكد من التعريف");
+
+            if (report.DuplexSupport == CapabilityStatus.VerifiedSupported) report.ConfirmedCapabilitiesList.Add("الطباعة على الوجهين (Duplex) مؤكدة");
+            else report.UnsupportedCapabilitiesList.Add("الطباعة على الوجهين غير مدعومة");
+
+            if (report.ColorSupport == CapabilityStatus.VerifiedSupported) report.ConfirmedCapabilitiesList.Add("طباعة ألوان مؤكدة");
+            else report.ConfirmedCapabilitiesList.Add("طباعة أبيض وأسود فقط");
+        }
+        catch (Exception ex)
+        {
+            report.A4Support = CapabilityStatus.VerifiedSupported; // Fallback standard
+            report.B5Support = CapabilityStatus.UnconfirmedOrUnknown;
+            report.DuplexSupport = CapabilityStatus.UnconfirmedOrUnknown;
+            report.ColorSupport = CapabilityStatus.UnconfirmedOrUnknown;
+            report.UnconfirmedCapabilitiesList.Add($"تعذر استعلام قدرات التعريف مباشرة: {ex.Message}");
+        }
+
+        return report;
+    }
+
+    public async Task<ConnectionTestResult> TestConnectionAsync(string printerName, string? connectionAddress)
+    {
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var result = new ConnectionTestResult
+        {
+            PrinterName = printerName,
+            SpoolerResponding = false,
+            HardwareResponding = false
+        };
+
+        try
+        {
+            using var server = new LocalPrintServer();
+            using var queue = server.GetPrintQueue(printerName);
+            queue.Refresh();
+
+            result.SpoolerResponding = true;
+            result.DiagnosticMessages.Add($"تم الاتصال بنجاح مع طابور الطباعة Windows Spooler (عدد المهام الحالية: {queue.NumberOfJobs}).");
+
+            if (queue.IsOffline)
+            {
+                result.DiagnosticMessages.Add("تنبيه: الطابعة في وضع غير متصل (Offline).");
+                result.StatusMessage = "الطابعة غير متصلة (Offline)";
+                result.IsSuccess = false;
+            }
+            else
+            {
+                result.HardwareResponding = true;
+                result.IsSuccess = true;
+                result.StatusMessage = "الاتصال بالطابعة نشط وجاهز لاستقبال الأوامر.";
+            }
+
+            result.CapabilitiesReport = ProbeCapabilities(printerName);
+        }
+        catch (Exception ex)
+        {
+            result.IsSuccess = false;
+            result.StatusMessage = $"فشل الاتصال: {ex.Message}";
+            result.DiagnosticMessages.Add($"خطأ Spooler: {ex.Message}");
+            result.CapabilitiesReport = new DeviceCapabilitiesReport { PrinterName = printerName };
+        }
+        finally
+        {
+            sw.Stop();
+            result.LatencyMs = sw.ElapsedMilliseconds;
+        }
+
+        return result;
+    }
 
     public Task<PrinterStatusInfo> CheckStatusAsync(string printerName)
     {

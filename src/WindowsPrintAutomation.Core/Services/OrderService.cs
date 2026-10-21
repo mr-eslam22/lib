@@ -21,7 +21,7 @@ public interface IOrderService
     Task<Order?> GetOrderByNumberAsync(string orderNumber);
     Task<List<Order>> GetOrdersAsync(OrderStatus? status = null, string? searchQuery = null, int limit = 100);
     Task<bool> UpdateOrderStatusAsync(long orderId, OrderStatus status);
-    PreflightValidationResult ValidateOrder(Order order);
+    PreflightValidationResult ValidateOrder(Order order, Printer? targetPrinter = null);
     int CalculateItemSheets(int pageCount, int copies, PrintDuplexOption duplex);
     Task<string> GenerateNextOrderNumberAsync();
 }
@@ -49,7 +49,7 @@ public class OrderService : IOrderService
         return copies * sheetsPerCopy;
     }
 
-    public PreflightValidationResult ValidateOrder(Order order)
+    public PreflightValidationResult ValidateOrder(Order order, Printer? targetPrinter = null)
     {
         var result = new PreflightValidationResult();
 
@@ -62,6 +62,18 @@ public class OrderService : IOrderService
         {
             result.Issues.Add("الطلب لا يحتوي على أي كتب مختارة.");
             return result;
+        }
+
+        if (targetPrinter != null)
+        {
+            if (!targetPrinter.IsActive)
+            {
+                result.Issues.Add($"الماكينة المحددة '{targetPrinter.WindowsPrinterName}' معطلة في النظام.");
+            }
+            if (!targetPrinter.IsOnline)
+            {
+                result.Warnings.Add($"الماكينة المحددة '{targetPrinter.WindowsPrinterName}' غير متصلة حاليًا (Offline).");
+            }
         }
 
         int totalSheets = 0;
@@ -106,6 +118,26 @@ public class OrderService : IOrderService
             else
             {
                 result.Issues.Add($"{bookLabel}: مسار الملف فارغ.");
+            }
+
+            // Target printer capability check
+            if (targetPrinter != null)
+            {
+                var sizeStr = item.PaperSize.ToString();
+                if (!targetPrinter.SupportedPaperSizes.Contains(sizeStr, StringComparison.OrdinalIgnoreCase))
+                {
+                    result.Issues.Add($"{bookLabel}: مقاس الورق ({sizeStr}) غير مدعوم على الماكينة المحددة ({targetPrinter.WindowsPrinterName}).");
+                }
+
+                if (item.Duplex != PrintDuplexOption.Simplex && !targetPrinter.SupportsDuplex)
+                {
+                    result.Issues.Add($"{bookLabel}: الطباعة على الوجهين غير مدعومة على الماكينة المحددة ({targetPrinter.WindowsPrinterName}).");
+                }
+
+                if (item.ColorMode == PrintColorOption.Color && !targetPrinter.SupportsColor)
+                {
+                    result.Issues.Add($"{bookLabel}: الطباعة بالألوان غير مدعومة على الماكينة المحددة ({targetPrinter.WindowsPrinterName}).");
+                }
             }
 
             item.EstimatedSheets = CalculateItemSheets(item.PageCount, item.Copies, item.Duplex);

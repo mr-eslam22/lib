@@ -28,8 +28,10 @@ public interface IPrintEngine
     event EventHandler<JobStatusChangedEventArgs>? JobStatusChanged;
     event EventHandler<PrinterErrorEventArgs>? PrinterErrorOccurred;
 
+    IPrinterAdapterRegistry AdapterRegistry { get; }
     void SetAdapter(IPrinterAdapter adapter);
     IPrinterAdapter GetAdapter();
+    IPrinterAdapter GetAdapterForPrinter(string printerName);
     Task StartAsync(CancellationToken cancellationToken = default);
     Task StopAsync();
     Task<PrintExecutionResult> ProcessSingleJobAsync(long jobId);
@@ -42,7 +44,8 @@ public class PrintEngine : IPrintEngine
 {
     private readonly DatabaseService _databaseService;
     private readonly IRecoveryService _recoveryService;
-    private IPrinterAdapter _printerAdapter;
+    private readonly IPrinterAdapterRegistry _adapterRegistry;
+    private IPrinterAdapter _defaultAdapter;
     private readonly HashSet<string> _pausedPrinters = new(StringComparer.OrdinalIgnoreCase);
     private CancellationTokenSource? _engineCts;
     private Task? _workerTask;
@@ -51,19 +54,58 @@ public class PrintEngine : IPrintEngine
     public event EventHandler<JobStatusChangedEventArgs>? JobStatusChanged;
     public event EventHandler<PrinterErrorEventArgs>? PrinterErrorOccurred;
 
-    public PrintEngine(DatabaseService databaseService, IRecoveryService recoveryService, IPrinterAdapter? adapter = null)
+    public IPrinterAdapterRegistry AdapterRegistry => _adapterRegistry;
+
+    public PrintEngine(DatabaseService databaseService, IRecoveryService recoveryService, IPrinterAdapter? defaultAdapter = null, IPrinterAdapterRegistry? registry = null)
     {
         _databaseService = databaseService;
         _recoveryService = recoveryService;
-        _printerAdapter = adapter ?? new Adapters.WindowsSpoolerAdapter();
+        _defaultAdapter = defaultAdapter ?? new Adapters.WindowsSpoolerAdapter();
+
+        _adapterRegistry = registry ?? new PrinterAdapterRegistry(_defaultAdapter);
+        if (defaultAdapter != null)
+        {
+            _adapterRegistry.RegisterAdapter(defaultAdapter);
+        }
+
+        // Register default multi-vendor adapters
+        _adapterRegistry.RegisterAdapter(new Adapters.WindowsSpoolerAdapter());
+        _adapterRegistry.RegisterAdapter(new Adapters.HpPrinterAdapter());
+        _adapterRegistry.RegisterAdapter(new Adapters.KyoceraPrinterAdapter());
+        _adapterRegistry.RegisterAdapter(new Adapters.GenericNetworkSnmpAdapter());
     }
 
     public void SetAdapter(IPrinterAdapter adapter)
     {
-        _printerAdapter = adapter ?? throw new ArgumentNullException(nameof(adapter));
+        _defaultAdapter = adapter ?? throw new ArgumentNullException(nameof(adapter));
+        _adapterRegistry.RegisterAdapter(adapter);
     }
 
-    public IPrinterAdapter GetAdapter() => _printerAdapter;
+    public IPrinterAdapter GetAdapter() => _defaultAdapter;
+
+    public IPrinterAdapter GetAdapterForPrinter(string printerName)
+    {
+        using var conn = _databaseService.CreateConnection();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT Id, WindowsPrinterName, Manufacturer, Model, DriverName, PortName, AdapterFamily FROM Printers WHERE WindowsPrinterName = @name LIMIT 1";
+        cmd.Parameters.AddWithValue("@name", printerName);
+        using var reader = cmd.ExecuteReader();
+        if (reader.Read())
+        {
+            var printer = new Printer
+            {
+                Id = reader.GetInt64(0),
+                WindowsPrinterName = reader.GetString(1),
+                Manufacturer = reader.GetString(2),
+                Model = reader.GetString(3),
+                DriverName = reader.GetString(4),
+                PortName = reader.GetString(5),
+                AdapterFamily = reader.GetString(6)
+            };
+            return _adapterRegistry.ResolveAdapterForPrinter(printer);
+        }
+        return _defaultAdapter;
+    }
 
     public Task StartAsync(CancellationToken cancellationToken = default)
     {
@@ -228,8 +270,11 @@ public class PrintEngine : IPrintEngine
                 return new PrintExecutionResult { Success = false, ErrorMessage = errMsg, ErrorType = ErrorType.InvalidPDF };
             }
 
-            // Check printer status first
-            var printerStatus = await _printerAdapter.CheckStatusAsync(job.PrinterName);
+            // Resolve adapter specific to this printer model / family
+            var adapter = GetAdapterForPrinter(job.PrinterName);
+
+            // Check printer status first with isolated adapter
+            var printerStatus = await adapter.CheckStatusAsync(job.PrinterName);
             if (!printerStatus.IsOnline || printerStatus.HasError)
             {
                 var errType = printerStatus.DetectedError != ErrorType.None ? printerStatus.DetectedError : ErrorType.PrinterOffline;
@@ -243,7 +288,7 @@ public class PrintEngine : IPrintEngine
             }
 
             // 2. Transition to Submitted
-            await UpdateJobStateAsync(job, JobStatus.Submitted, VerificationStatus.NeedsVerification, $"إرسال البيانات إلى تعريف الطابعة '{job.PrinterName}'");
+            await UpdateJobStateAsync(job, JobStatus.Submitted, VerificationStatus.NeedsVerification, $"إرسال البيانات إلى تعريف الطابعة '{job.PrinterName}' عبر محول ({adapter.DisplayName})");
 
             // Dispatch to Adapter
             var request = new PrintJobRequest
@@ -260,7 +305,7 @@ public class PrintEngine : IPrintEngine
                 EndPage = job.EndPage
             };
 
-            var result = await _printerAdapter.SendPdfJobAsync(request);
+            var result = await adapter.SendPdfJobAsync(request);
 
             if (!result.Success)
             {
@@ -424,7 +469,8 @@ public class PrintEngine : IPrintEngine
 
         if (job.SpoolerJobId.HasValue)
         {
-            await _printerAdapter.CancelJobAsync(job.PrinterName, job.SpoolerJobId.Value);
+            var adapter = GetAdapterForPrinter(job.PrinterName);
+            await adapter.CancelJobAsync(job.PrinterName, job.SpoolerJobId.Value);
         }
 
         await UpdateJobStateAsync(job, JobStatus.Cancelled, VerificationStatus.Cancelled, "تم إلغاء المهمة من قِبل المستخدم.");

@@ -52,9 +52,7 @@
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <StackPanel Orientation="Horizontal">
-                                            <Button Content="{Binding IsPaused, Converter={x:Null}}"
-                                                    Style="{StaticResource GhostButton}"
-                                                    Padding="6,2" FontSize="11" Margin="0,0,4,0" Click="BtnTogglePause_Click">
+                                            <Button Padding="6,2" FontSize="11" Margin="0,0,4,0" Click="BtnTogglePause_Click">
                                                 <Button.Style>
                                                     <Style TargetType="Button" BasedOn="{StaticResource GhostButton}">
                                                         <Setter Property="Content" Value="إيقاف" />
@@ -68,9 +66,7 @@
                                                 </Button.Style>
                                             </Button>
 
-                                            <Button Content="{Binding IsActive, Converter={x:Null}}"
-                                                    Style="{StaticResource GhostButton}"
-                                                    Padding="6,2" FontSize="11" Click="BtnToggleActive_Click">
+                                            <Button Padding="6,2" FontSize="11" Click="BtnToggleActive_Click">
                                                 <Button.Style>
                                                     <Style TargetType="Button" BasedOn="{StaticResource GhostButton}">
                                                         <Setter Property="Content" Value="تعطيل" />

@@ -65,8 +65,16 @@ public class MainViewModel : ViewModelBase
     public int UnresolvedErrorsCount
     {
         get => _unresolvedErrorsCount;
-        set => SetProperty(ref _unresolvedErrorsCount, value);
+        set
+        {
+            if (SetProperty(ref _unresolvedErrorsCount, value))
+            {
+                OnPropertyChanged(nameof(HasUnresolvedErrors));
+            }
+        }
     }
+
+    public bool HasUnresolvedErrors => _unresolvedErrorsCount > 0;
 
     public string SystemStatusText
     {

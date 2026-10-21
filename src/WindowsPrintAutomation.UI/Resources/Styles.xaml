@@ -26,6 +26,9 @@
     <SolidColorBrush x:Key="DangerBrush" Color="{StaticResource DangerColor}" />
     <SolidColorBrush x:Key="BorderBrush" Color="{StaticResource BorderColor}" />
 
+    <!-- Value Converters -->
+    <BooleanToVisibilityConverter x:Key="BoolToVis" />
+
     <!-- Typography Base -->
     <Style TargetType="TextBlock">
         <Setter Property="FontFamily" Value="Segoe UI, Tahoma, Arial" />

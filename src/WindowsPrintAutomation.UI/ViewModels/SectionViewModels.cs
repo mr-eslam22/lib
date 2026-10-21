@@ -171,7 +171,18 @@ public class LibraryViewModel : ViewModelBase
     public string SearchQuery { get => _searchQuery; set { SetProperty(ref _searchQuery, value); _ = LoadBooksAsync(); } }
     public string SelectedGrade { get => _selectedGrade; set { SetProperty(ref _selectedGrade, value); _ = LoadSubjectsAsync(); _ = LoadBooksAsync(); } }
     public string SelectedSubject { get => _selectedSubject; set { SetProperty(ref _selectedSubject, value); _ = LoadBooksAsync(); } }
-    public string ImportStatusMessage { get => _importStatusMessage; set => SetProperty(ref _importStatusMessage, value); }
+    public string ImportStatusMessage
+    {
+        get => _importStatusMessage;
+        set
+        {
+            if (SetProperty(ref _importStatusMessage, value))
+            {
+                OnPropertyChanged(nameof(HasImportStatus));
+            }
+        }
+    }
+    public bool HasImportStatus => !string.IsNullOrWhiteSpace(_importStatusMessage);
     public bool IsScanning { get => _isScanning; set => SetProperty(ref _isScanning, value); }
     public Book? SelectedBook { get => _selectedBook; set => SetProperty(ref _selectedBook, value); }
 

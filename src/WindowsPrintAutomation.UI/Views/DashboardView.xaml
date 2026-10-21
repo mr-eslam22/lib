@@ -73,7 +73,8 @@
                                             <TextBlock Text="{Binding CurrentStatusText}" FontSize="12" Foreground="{StaticResource AccentBrush}" Margin="0,4,0,0" />
                                         </StackPanel>
                                         <Border Grid.Column="1" VerticalAlignment="Center" CornerRadius="6" Padding="8,4"
-                                                Background="{Binding IsOnline, Converter={x:Static BooleanToVisibilityConverter.Instance}}">
+                                                Background="{StaticResource BgTertiary}"
+                                                Visibility="{Binding IsOnline, Converter={StaticResource BoolToVis}}">
                                             <TextBlock Text="متصلة" FontSize="11" FontWeight="Bold" Foreground="{StaticResource SuccessBrush}" />
                                         </Border>
                                     </Grid>

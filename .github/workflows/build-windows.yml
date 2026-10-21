@@ -33,7 +33,6 @@ jobs:
             -c Release `
             -r win-x64 `
             --self-contained true `
-            --no-restore `
             -o publish/win-x64
 
       - name: Create Artifacts Directory
@@ -42,10 +41,18 @@ jobs:
       - name: Build Inno Setup Installer
         run: |
           $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup --no-progress -y
+          }
           if (Test-Path $iscc) {
             & $iscc installer\setup.iss
           } else {
-            Write-Warning "Inno Setup compiler not found at default location. Skipping installer compilation."
+            $cmd = Get-Command ISCC.exe -ErrorAction SilentlyContinue
+            if ($cmd) {
+              & $cmd.Source installer\setup.iss
+            } else {
+              Write-Warning "Inno Setup compiler not found. Skipping installer compilation."
+            }
           }
 
       - name: Package Portable ZIP Archive

@@ -1,3 +1,4 @@
+using System.IO;
 using Microsoft.Data.Sqlite;
 using WindowsPrintAutomation.Core.Data;
 using WindowsPrintAutomation.Core.Domain.Entities;
@@ -149,7 +150,7 @@ public class PrintEngine : IPrintEngine
             {
                 break;
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 // Prevent crash loop
                 await Task.Delay(2000, token);

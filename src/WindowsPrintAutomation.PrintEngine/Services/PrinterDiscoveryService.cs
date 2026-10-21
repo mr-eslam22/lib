@@ -57,6 +57,9 @@ public class PrinterDiscoveryService : IPrinterDiscoveryService
         try
         {
             using var server = new LocalPrintServer();
+            string defaultName = string.Empty;
+            try { defaultName = server.DefaultPrintQueue?.FullName ?? string.Empty; } catch { }
+
             var queues = server.GetPrintQueues();
             foreach (var q in queues)
             {
@@ -65,7 +68,8 @@ public class PrinterDiscoveryService : IPrinterDiscoveryService
                 seenNames.Add(q.FullName);
                 var driver = q.QueueDriver?.Name ?? string.Empty;
                 var port = q.QueuePort?.Name ?? string.Empty;
-                var info = BuildDiscoveredInfo(q.FullName, driver, port, false, q.IsDefaultPrinter);
+                bool isDefault = !string.IsNullOrEmpty(defaultName) && string.Equals(q.FullName, defaultName, StringComparison.OrdinalIgnoreCase);
+                var info = BuildDiscoveredInfo(q.FullName, driver, port, false, isDefault);
                 list.Add(info);
             }
         }

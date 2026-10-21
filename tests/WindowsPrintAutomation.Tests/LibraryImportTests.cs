@@ -1,3 +1,4 @@
+using System.IO;
 using UglyToad.PdfPig.Writer;
 using WindowsPrintAutomation.Core.Data;
 using WindowsPrintAutomation.Core.Services;

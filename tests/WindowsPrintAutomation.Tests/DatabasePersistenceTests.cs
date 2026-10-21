@@ -1,3 +1,4 @@
+using System.IO;
 using WindowsPrintAutomation.Core.Data;
 using Xunit;
 

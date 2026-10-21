@@ -74,6 +74,12 @@ public class LibraryService : ILibraryService
             cancellationToken.ThrowIfCancellationRequested();
 
             var ext = Path.GetExtension(filePath).ToLowerInvariant();
+            // Ignore SQLite database, journal, and lock files
+            if (ext is ".db" or ".db-wal" or ".db-shm" or ".tmp" or ".lock" or ".ds_store")
+            {
+                continue;
+            }
+
             if (ext != ".pdf")
             {
                 result.UnsupportedCount++;

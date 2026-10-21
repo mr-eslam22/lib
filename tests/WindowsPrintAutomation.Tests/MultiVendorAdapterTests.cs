@@ -62,13 +62,13 @@ public class MultiVendorAdapterTests : IDisposable
         Assert.Equal(CapabilityStatus.VerifiedSupported, kyoReport.A4Support);
         Assert.Equal(CapabilityStatus.VerifiedSupported, kyoReport.B5Support); // B5 confirmed!
         Assert.Equal(CapabilityStatus.VerifiedSupported, kyoReport.DuplexSupport);
-        Assert.True(kyoReport.ConfirmedCapabilitiesList.Any(c => c.Contains("B5")));
+        Assert.Contains(kyoReport.ConfirmedCapabilitiesList, c => c.Contains("B5"));
 
         // HP LaserJet probe:
         var hpReport = fakeAdapter.ProbeCapabilities("HP Color LaserJet Enterprise M553");
         Assert.Equal(CapabilityStatus.VerifiedSupported, hpReport.A4Support);
         Assert.Equal(CapabilityStatus.UnconfirmedOrUnknown, hpReport.B5Support); // B5 unconfirmed by default on standard A4 tray!
-        Assert.True(hpReport.UnconfirmedCapabilitiesList.Any(c => c.Contains("B5")));
+        Assert.Contains(hpReport.UnconfirmedCapabilitiesList, c => c.Contains("B5"));
 
         // Generic printer probe:
         var genReport = fakeAdapter.ProbeCapabilities("Generic Windows Virtual Printer");

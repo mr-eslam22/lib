@@ -89,7 +89,8 @@
             <Border Grid.Column="1" Style="{StaticResource CardPanel}">
                 <DockPanel LastChildFill="True">
                     <TextBlock DockPanel.Dock="Top" Text="أحدث مهام الطباعة والتحقق الفيزيائي" FontSize="16" FontWeight="Bold" Margin="0,0,0,16" />
-                    <DataGrid ItemsSource="{Binding RecentJobs}">
+                    <DataGrid ItemsSource="{Binding RecentJobs}"
+                              ScrollViewer.HorizontalScrollBarVisibility="Auto" ScrollViewer.VerticalScrollBarVisibility="Auto">
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="رقم المهمة" Binding="{Binding JobNumber}" Width="130" />
                             <DataGridTextColumn Header="الماكينة" Binding="{Binding PrinterName}" Width="150" />

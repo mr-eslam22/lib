@@ -16,7 +16,8 @@
                     <TextBlock Text="تشمل المهام المتوقفة عند انقطاع الكهرباء أو انحشار الورق أو المهام المنتهية من Spooler وبانتظار العد." FontSize="11" Foreground="{StaticResource TextMuted}" Margin="0,4,0,0" />
                 </StackPanel>
 
-                <DataGrid ItemsSource="{Binding RecoveryJobs}" SelectedItem="{Binding SelectedJob}">
+                <DataGrid ItemsSource="{Binding RecoveryJobs}" SelectedItem="{Binding SelectedJob}"
+                          ScrollViewer.HorizontalScrollBarVisibility="Auto" ScrollViewer.VerticalScrollBarVisibility="Auto">
                     <DataGrid.Columns>
                         <DataGridTextColumn Header="رقم المهمة" Binding="{Binding JobNumber}" Width="140" />
                         <DataGridTextColumn Header="الماكينة" Binding="{Binding PrinterName}" Width="150" />

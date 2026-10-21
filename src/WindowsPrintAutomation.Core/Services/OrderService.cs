@@ -21,6 +21,7 @@ public interface IOrderService
     Task<Order?> GetOrderByNumberAsync(string orderNumber);
     Task<List<Order>> GetOrdersAsync(OrderStatus? status = null, string? searchQuery = null, int limit = 100);
     Task<bool> UpdateOrderStatusAsync(long orderId, OrderStatus status);
+    Task<bool> DeleteOrderAsync(long orderId);
     PreflightValidationResult ValidateOrder(Order order, Printer? targetPrinter = null);
     int CalculateItemSheets(int pageCount, int copies, PrintDuplexOption duplex);
     Task<string> GenerateNextOrderNumberAsync();
@@ -459,4 +460,68 @@ public class OrderService : IOrderService
         cmd.Parameters.AddWithValue("@id", orderId);
         return await cmd.ExecuteNonQueryAsync() > 0;
     }
+
+    public async Task<bool> DeleteOrderAsync(long orderId)
+    {
+        using var conn = _databaseService.CreateConnection();
+        using var transaction = conn.BeginTransaction();
+
+        try
+        {
+            // 1. Delete PrintJobEvents for all print jobs associated with this order
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.Transaction = transaction;
+                cmd.CommandText = "DELETE FROM PrintJobEvents WHERE PrintJobId IN (SELECT Id FROM PrintJobs WHERE OrderId = @orderId);";
+                cmd.Parameters.AddWithValue("@orderId", orderId);
+                await cmd.ExecuteNonQueryAsync();
+            }
+
+            // 2. Clear ParentJobId to avoid self-referencing foreign key violations
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.Transaction = transaction;
+                cmd.CommandText = "UPDATE PrintJobs SET ParentJobId = NULL WHERE OrderId = @orderId;";
+                cmd.Parameters.AddWithValue("@orderId", orderId);
+                await cmd.ExecuteNonQueryAsync();
+            }
+
+            // 3. Delete PrintJobs for this order
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.Transaction = transaction;
+                cmd.CommandText = "DELETE FROM PrintJobs WHERE OrderId = @orderId;";
+                cmd.Parameters.AddWithValue("@orderId", orderId);
+                await cmd.ExecuteNonQueryAsync();
+            }
+
+            // 4. Delete OrderItems for this order
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.Transaction = transaction;
+                cmd.CommandText = "DELETE FROM OrderItems WHERE OrderId = @orderId;";
+                cmd.Parameters.AddWithValue("@orderId", orderId);
+                await cmd.ExecuteNonQueryAsync();
+            }
+
+            // 5. Delete the Order record
+            int affected = 0;
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.Transaction = transaction;
+                cmd.CommandText = "DELETE FROM Orders WHERE Id = @orderId;";
+                cmd.Parameters.AddWithValue("@orderId", orderId);
+                affected = await cmd.ExecuteNonQueryAsync();
+            }
+
+            transaction.Commit();
+            return affected > 0;
+        }
+        catch
+        {
+            transaction.Rollback();
+            throw;
+        }
+    }
 }
+

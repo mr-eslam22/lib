@@ -17,7 +17,8 @@
                              Margin="0,8,0,0" ToolTip="ابحث بالاسم أو رقم الهاتف أو كود العميل" />
                 </StackPanel>
 
-                <DataGrid ItemsSource="{Binding Customers}" SelectedItem="{Binding SelectedCustomer}">
+                <DataGrid ItemsSource="{Binding Customers}" SelectedItem="{Binding SelectedCustomer}"
+                          ScrollViewer.HorizontalScrollBarVisibility="Auto" ScrollViewer.VerticalScrollBarVisibility="Auto">
                     <DataGrid.Columns>
                         <DataGridTextColumn Header="كود العميل" Binding="{Binding CustomerCode}" Width="120" />
                         <DataGridTextColumn Header="اسم العميل" Binding="{Binding FullName}" Width="180" />

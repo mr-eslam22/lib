@@ -9,7 +9,7 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <!-- Top Header & New Order Trigger -->
+        <!-- Top Header & New Order Trigger & Status Filter -->
         <Border Grid.Row="0" Style="{StaticResource CardPanel}" Margin="0,0,0,16">
             <Grid>
                 <Grid.ColumnDefinitions>
@@ -17,292 +17,329 @@
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
 
-                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="📋 سجل الطلبات" FontSize="18" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,16,0" />
-                    <TextBox Text="{Binding SearchQuery, UpdateSourceTrigger=PropertyChanged}" Width="320" ToolTip="ابحث برقم الطلب أو اسم العميل" />
-                </StackPanel>
+                <WrapPanel Grid.Column="0" VerticalAlignment="Center">
+                    <TextBlock Text="📋 سجل الطلبات" FontSize="18" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,16,6" />
+                    <TextBox Text="{Binding SearchQuery, UpdateSourceTrigger=PropertyChanged}" Width="250" ToolTip="ابحث برقم الطلب أو اسم العميل أو الهاتف" Margin="0,0,16,6" />
+                    
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,16,6">
+                        <TextBlock Text="حالة الطلب للزبون:" VerticalAlignment="Center" Margin="0,0,8,0" Foreground="{StaticResource TextMuted}" FontSize="13" />
+                        <ComboBox ItemsSource="{Binding StatusFilters}" SelectedItem="{Binding StatusFilter}" Width="230" />
+                    </StackPanel>
+                </WrapPanel>
 
-                <Button Grid.Column="1" Content="➕  إنشاء طلب طباعة جديد" Style="{StaticResource PrimaryButton}" Click="BtnNewOrder_Click" FontSize="14" Padding="18,10" />
+                <Button Grid.Column="1" Content="➕  إنشاء طلب طباعة جديد" Style="{StaticResource PrimaryButton}" Click="BtnNewOrder_Click" FontSize="14" Padding="18,10" VerticalAlignment="Center" />
             </Grid>
         </Border>
 
         <!-- Orders Table -->
         <Border Grid.Row="1" Style="{StaticResource CardPanel}">
-            <DataGrid ItemsSource="{Binding Orders}" SelectedItem="{Binding SelectedOrder}">
+            <DataGrid ItemsSource="{Binding Orders}" SelectedItem="{Binding SelectedOrder}"
+                      ScrollViewer.HorizontalScrollBarVisibility="Auto" ScrollViewer.VerticalScrollBarVisibility="Auto">
                 <DataGrid.Columns>
-                    <DataGridTextColumn Header="رقم الطلب" Binding="{Binding OrderNumber}" Width="160" />
-                    <DataGridTextColumn Header="اسم العميل" Binding="{Binding CustomerName}" Width="180" />
-                    <DataGridTextColumn Header="هاتف العميل" Binding="{Binding CustomerPhone}" Width="140" />
-                    <DataGridTextColumn Header="عدد الكتب" Binding="{Binding TotalItemsCount}" Width="100" />
-                    <DataGridTextColumn Header="تقدير الأوراق" Binding="{Binding TotalEstimatedSheets}" Width="110" />
-                    <DataGridTextColumn Header="الحالة" Binding="{Binding Status}" Width="120" />
-                    <DataGridTextColumn Header="تاريخ الإنشاء" Binding="{Binding CreatedAt, StringFormat=\{0:yyyy/MM/dd HH:mm\}}" Width="*" />
+                    <DataGridTextColumn Header="رقم الطلب" Binding="{Binding OrderNumber}" Width="135" />
+                    <DataGridTextColumn Header="اسم العميل" Binding="{Binding CustomerName}" Width="150" />
+                    <DataGridTextColumn Header="هاتف العميل" Binding="{Binding CustomerPhone}" Width="120" />
+                    <DataGridTextColumn Header="عدد الكتب" Binding="{Binding TotalItemsCount}" Width="85" />
+                    <DataGridTextColumn Header="تقدير الأوراق" Binding="{Binding TotalEstimatedSheets}" Width="95" />
+
+                    <!-- Arabic Status Badge -->
+                    <DataGridTemplateColumn Header="حالة الطلب للزبون" Width="170">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <Border Background="{Binding StatusBadgeBackground}" CornerRadius="6" Padding="8,4" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding StatusTextArabic}" Foreground="{Binding StatusBadgeForeground}" FontWeight="Bold" FontSize="12" />
+                                </Border>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+
+                    <!-- Completion / Delivery Indicator -->
+                    <DataGridTemplateColumn Header="اكتمال التسليم" Width="170">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding CustomerCompletionText}" Foreground="{Binding StatusBadgeForeground}" FontSize="12" VerticalAlignment="Center" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding CustomerCompletionText}" />
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+
+                    <DataGridTextColumn Header="تاريخ الإنشاء" Binding="{Binding CreatedAt, StringFormat=\{0:yyyy/MM/dd HH:mm\}}" Width="135" />
+
+                    <!-- Actions Column: Delete Order Button -->
+                    <DataGridTemplateColumn Header="إجراءات" Width="*">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <Button Content="🗑️ مسح الطلب" Style="{StaticResource DangerButton}" Padding="10,4" FontSize="11" Click="BtnDeleteOrder_Click" ToolTip="حذف هذا الطلب وجميع مهام الطباعة المرتبطة به نهائياً" />
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
                 </DataGrid.Columns>
             </DataGrid>
         </Border>
 
-        <!-- New Order Modal Popup (Multi-Book Interactive Wizard) -->
-        <Grid x:Name="NewOrderModal" Grid.RowSpan="2" Background="#DD080D1A" Visibility="Collapsed">
-            <Border Style="{StaticResource CardPanel}" Width="1150" Height="720" HorizontalAlignment="Center" VerticalAlignment="Center" Background="{StaticResource BgSecondary}">
-                <DockPanel LastChildFill="True">
-                    <!-- Modal Header -->
-                    <Border DockPanel.Dock="Top" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" Padding="0,0,0,14">
-                        <Grid>
-                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                <TextBlock Text="🛒  إنشاء طلب طباعة مدرسي جديد" FontSize="18" FontWeight="Bold" Foreground="White" />
-                                <TextBlock Text=" (حدد العميل والماكينة ثم اختر الكتب المراد طباعتها بالكميات المطلوبة)" FontSize="12" Foreground="{StaticResource TextMuted}" VerticalAlignment="Center" Margin="8,0,0,0" />
-                            </StackPanel>
-                            <Button Content="✕" HorizontalAlignment="Left" Background="Transparent" Foreground="{StaticResource TextMuted}" BorderThickness="0" FontSize="18" FontWeight="Bold" Click="BtnCloseModal_Click" Cursor="Hand" Padding="8,2" />
-                        </Grid>
-                    </Border>
-
-                    <!-- Modal Actions Bottom Bar -->
-                    <Border DockPanel.Dock="Bottom" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0" Padding="0,14,0,0" Margin="0,10,0,0">
-                        <Grid>
-                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                <Border Background="{StaticResource BgTertiary}" CornerRadius="6" Padding="12,6" Margin="0,0,12,0">
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="الكتب المختارة: " FontSize="13" Foreground="{StaticResource TextMuted}" />
-                                        <TextBlock Text="{Binding TotalDraftBooks}" FontSize="14" FontWeight="Bold" Foreground="White" />
-                                        <TextBlock Text=" كتاب | إجمالي النسخ: " FontSize="13" Foreground="{StaticResource TextMuted}" Margin="6,0,0,0" />
-                                        <TextBlock Text="{Binding TotalDraftCopies}" FontSize="14" FontWeight="Bold" Foreground="{StaticResource AccentBrush}" />
-                                    </StackPanel>
-                                </Border>
-
+        <!-- New Order Modal Popup (Multi-Book Interactive Wizard) with Responsive Scrollable Container -->
+        <Grid x:Name="NewOrderModal" Grid.RowSpan="2" Background="#EE080D1A" Visibility="Collapsed">
+            <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" Padding="12">
+                <Border Style="{StaticResource CardPanel}" MaxWidth="1200" MinWidth="750" MinHeight="520" HorizontalAlignment="Center" VerticalAlignment="Center" Background="{StaticResource BgSecondary}">
+                    <DockPanel LastChildFill="True">
+                        <!-- Modal Header -->
+                        <Border DockPanel.Dock="Top" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" Padding="0,0,0,14">
+                            <Grid>
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                    <TextBlock Text="إجمالي الأوراق المقدرة: " FontSize="14" Foreground="{StaticResource TextMuted}" VerticalAlignment="Center" />
-                                    <TextBlock Text="{Binding TotalDraftSheets}" FontSize="20" FontWeight="Bold" Foreground="{StaticResource SuccessBrush}" VerticalAlignment="Center" Margin="4,0,0,0" />
-                                    <TextBlock Text=" ورقة" FontSize="14" Foreground="{StaticResource TextMuted}" VerticalAlignment="Center" Margin="4,0,0,0" />
+                                    <TextBlock Text="🛒  إنشاء طلب طباعة مدرسي جديد" FontSize="18" FontWeight="Bold" Foreground="White" />
+                                    <TextBlock Text=" (حدد العميل والماكينة ثم اختر الكتب المراد طباعتها بالكميات المطلوبة)" FontSize="12" Foreground="{StaticResource TextMuted}" VerticalAlignment="Center" Margin="8,0,0,0" />
                                 </StackPanel>
-                            </StackPanel>
-
-                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
-                                <Button Content="إلغاء" Style="{StaticResource GhostButton}" Click="BtnCloseModal_Click" Margin="0,0,12,0" Padding="16,8" />
-                                <Button Content="✅  تأكيد وإنشاء الطلب وإرساله للطباعة" Style="{StaticResource SuccessButton}" Click="BtnConfirmOrder_Click" Padding="20,10" FontSize="14" />
-                            </StackPanel>
-                        </Grid>
-                    </Border>
-
-                    <!-- Client and Printer Bar -->
-                    <Border DockPanel.Dock="Top" Background="{StaticResource BgPrimary}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="12" Margin="0,12,0,12">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="2*" />
-                                <ColumnDefinition Width="2*" />
-                                <ColumnDefinition Width="3*" />
-                            </Grid.ColumnDefinitions>
-
-                            <!-- Select Customer -->
-                            <StackPanel Grid.Column="0" Margin="0,0,12,0">
-                                <TextBlock Text="العميل:" FontWeight="SemiBold" FontSize="12" Foreground="{StaticResource TextMuted}" Margin="0,0,0,4" />
-                                <ComboBox ItemsSource="{Binding AvailableCustomers}" SelectedItem="{Binding SelectedCustomer}" DisplayMemberPath="FullName" />
-                            </StackPanel>
-
-                            <!-- Target Printer -->
-                            <StackPanel Grid.Column="1" Margin="0,0,12,0">
-                                <TextBlock Text="الماكينة المستهدفة للطباعة:" FontWeight="SemiBold" FontSize="12" Foreground="{StaticResource TextMuted}" Margin="0,0,0,4" />
-                                <ComboBox ItemsSource="{Binding AvailablePrinters}" SelectedValuePath="WindowsPrinterName" SelectedValue="{Binding SelectedPrinterName}" DisplayMemberPath="WindowsPrinterName" />
-                            </StackPanel>
-
-                            <!-- Order Notes -->
-                            <StackPanel Grid.Column="2">
-                                <TextBlock Text="ملاحظات الطلب أو التسليم:" FontWeight="SemiBold" FontSize="12" Foreground="{StaticResource TextMuted}" Margin="0,0,0,4" />
-                                <TextBox Text="{Binding OrderNotes, UpdateSourceTrigger=PropertyChanged}" />
-                            </StackPanel>
-                        </Grid>
-                    </Border>
-
-                    <!-- Main Dual-Pane: Books Catalog & Selected Draft -->
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <!-- Right Pane: Catalog / Available Books (Width: 500) -->
-                            <ColumnDefinition Width="500" />
-                            <!-- Splitter separator -->
-                            <ColumnDefinition Width="16" />
-                            <!-- Left Pane: Selected Items in Order (Width: *) -->
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-
-                        <!-- Right Pane: Catalog -->
-                        <Border Grid.Column="0" Background="{StaticResource BgPrimary}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="12">
-                            <DockPanel LastChildFill="True">
-                                <TextBlock DockPanel.Dock="Top" Text="📚 كتالوج الكتب المتاحة (اضغط لإضافة الكتاب)" FontWeight="Bold" FontSize="14" Margin="0,0,0,8" Foreground="{StaticResource AccentBrush}" />
-
-                                <!-- Search & Filters -->
-                                <StackPanel DockPanel.Dock="Top" Margin="0,0,0,10">
-                                    <TextBox Text="{Binding CatalogSearch, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,6" ToolTip="ابحث باسم الكتاب أو المادة أو الصف..." />
-
-                                    <Grid Margin="0,0,0,8">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="*" />
-                                        </Grid.ColumnDefinitions>
-                                        <StackPanel Grid.Column="0" Margin="0,0,6,0">
-                                            <TextBlock Text="الصف الدراسي:" FontSize="11" Foreground="{StaticResource TextMuted}" Margin="0,0,0,2" />
-                                            <ComboBox ItemsSource="{Binding CatalogGrades}" SelectedItem="{Binding CatalogGrade}" />
-                                        </StackPanel>
-                                        <StackPanel Grid.Column="1">
-                                            <TextBlock Text="المادة:" FontSize="11" Foreground="{StaticResource TextMuted}" Margin="0,0,0,2" />
-                                            <ComboBox ItemsSource="{Binding CatalogSubjects}" SelectedItem="{Binding CatalogSubject}" />
-                                        </StackPanel>
-                                    </Grid>
-
-                                    <!-- Quick batch add button -->
-                                    <Button Content="⚡ إضافة جميع كتب هذا الصف للطلب دفعة واحدة" Style="{StaticResource GhostButton}" Click="BtnAddAllFiltered_Click" FontSize="12" Padding="8,6" />
-                                </StackPanel>
-
-                                <!-- Books List -->
-                                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                                    <ItemsControl ItemsSource="{Binding FilteredBooks}">
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate>
-                                                <Border Background="{StaticResource BgSecondary}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="6" Padding="10" Margin="0,0,0,6">
-                                                    <Grid>
-                                                        <Grid.ColumnDefinitions>
-                                                            <ColumnDefinition Width="*" />
-                                                            <ColumnDefinition Width="Auto" />
-                                                        </Grid.ColumnDefinitions>
-
-                                                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                                                            <TextBlock Text="{Binding Title}" FontWeight="Bold" FontSize="13" Foreground="White" TextTrimming="CharacterEllipsis" />
-                                                            <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
-                                                                <Border Background="{StaticResource BgTertiary}" CornerRadius="4" Padding="6,2" Margin="0,0,6,0">
-                                                                    <TextBlock Text="{Binding Grade}" FontSize="11" Foreground="{StaticResource TextMuted}" />
-                                                                </Border>
-                                                                <Border Background="{StaticResource BgTertiary}" CornerRadius="4" Padding="6,2" Margin="0,0,6,0">
-                                                                    <TextBlock Text="{Binding Subject}" FontSize="11" Foreground="{StaticResource TextMuted}" />
-                                                                </Border>
-                                                                <Border Background="#14532D" CornerRadius="4" Padding="6,2">
-                                                                    <TextBlock Text="{Binding PageCount, StringFormat='📄 {0} صفحة'}" FontSize="11" Foreground="#86EFAC" FontWeight="SemiBold" />
-                                                                </Border>
-                                                            </StackPanel>
-                                                        </StackPanel>
-
-                                                        <Button Grid.Column="1" Content="➕ أضف" Style="{StaticResource PrimaryButton}" VerticalAlignment="Center" Padding="12,6" FontSize="12" Click="BtnAddBookItem_Click" Margin="8,0,0,0" />
-                                                    </Grid>
-                                                </Border>
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
-                                </ScrollViewer>
-                            </DockPanel>
+                                <Button Content="✕" HorizontalAlignment="Left" Background="Transparent" Foreground="{StaticResource TextMuted}" BorderThickness="0" FontSize="18" FontWeight="Bold" Click="BtnCloseModal_Click" Cursor="Hand" Padding="8,2" />
+                            </Grid>
                         </Border>
 
-                        <!-- Left Pane: Selected Order Items with Print Settings -->
-                        <Border Grid.Column="2" Background="{StaticResource BgPrimary}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="12">
-                            <DockPanel LastChildFill="True">
-                                <Grid DockPanel.Dock="Top" Margin="0,0,0,10">
-                                    <TextBlock Text="🛒 الكتب المضافة للطلب وإعدادات الطباعة:" FontWeight="Bold" FontSize="14" Foreground="{StaticResource SuccessBrush}" VerticalAlignment="Center" />
-                                </Grid>
+                        <!-- Modal Actions Bottom Bar -->
+                        <Border DockPanel.Dock="Bottom" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0" Padding="0,14,0,0" Margin="0,10,0,0">
+                            <Grid>
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Border Background="{StaticResource BgTertiary}" CornerRadius="6" Padding="12,6" Margin="0,0,12,0">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="الكتب المختارة: " FontSize="13" Foreground="{StaticResource TextMuted}" />
+                                            <TextBlock Text="{Binding TotalDraftBooks}" FontSize="14" FontWeight="Bold" Foreground="White" />
+                                            <TextBlock Text=" كتاب | إجمالي النسخ: " FontSize="13" Foreground="{StaticResource TextMuted}" Margin="6,0,0,0" />
+                                            <TextBlock Text="{Binding TotalDraftCopies}" FontSize="14" FontWeight="Bold" Foreground="{StaticResource AccentBrush}" />
+                                        </StackPanel>
+                                    </Border>
 
-                                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                                    <StackPanel>
-                                        <!-- Empty State Notice -->
-                                        <Border Background="{StaticResource BgSecondary}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="32,24" Margin="0,20,0,0"
-                                                Visibility="{Binding DraftItems.Count, Converter={StaticResource BoolToVis}, ConverterParameter=Inverse}">
-                                            <StackPanel HorizontalAlignment="Center">
-                                                <TextBlock Text="📖" FontSize="36" HorizontalAlignment="Center" Margin="0,0,0,8" />
-                                                <TextBlock Text="لم يتم اختيار أي كتب للطلب بعد!" FontSize="15" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center" />
-                                                <TextBlock Text="اختر الكتب المطلوبة للعميل من قائمة الكتالوج على اليمين ➡️ بالضغط على '➕ أضف'" FontSize="12" Foreground="{StaticResource TextMuted}" HorizontalAlignment="Center" Margin="0,4,0,0" />
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                        <TextBlock Text="إجمالي الأوراق المقدرة: " FontSize="14" Foreground="{StaticResource TextMuted}" VerticalAlignment="Center" />
+                                        <TextBlock Text="{Binding TotalDraftSheets}" FontSize="20" FontWeight="Bold" Foreground="{StaticResource SuccessBrush}" VerticalAlignment="Center" Margin="4,0,0,0" />
+                                        <TextBlock Text=" ورقة" FontSize="14" Foreground="{StaticResource TextMuted}" VerticalAlignment="Center" Margin="4,0,0,0" />
+                                    </StackPanel>
+                                </StackPanel>
+
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
+                                    <Button Content="إلغاء" Style="{StaticResource GhostButton}" Click="BtnCloseModal_Click" Margin="0,0,12,0" Padding="16,8" />
+                                    <Button Content="✅  تأكيد وإنشاء الطلب وإرساله للطباعة" Style="{StaticResource SuccessButton}" Click="BtnConfirmOrder_Click" Padding="20,10" FontSize="14" />
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
+                        <!-- Client and Printer Bar -->
+                        <Border DockPanel.Dock="Top" Background="{StaticResource BgPrimary}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="12" Margin="0,12,0,12">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="2*" />
+                                    <ColumnDefinition Width="2*" />
+                                    <ColumnDefinition Width="3*" />
+                                </Grid.ColumnDefinitions>
+
+                                <!-- Select Customer -->
+                                <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                                    <TextBlock Text="العميل:" FontWeight="SemiBold" FontSize="12" Foreground="{StaticResource TextMuted}" Margin="0,0,0,4" />
+                                    <ComboBox ItemsSource="{Binding AvailableCustomers}" SelectedItem="{Binding SelectedCustomer}" DisplayMemberPath="FullName" />
+                                </StackPanel>
+
+                                <!-- Target Printer -->
+                                <StackPanel Grid.Column="1" Margin="0,0,12,0">
+                                    <TextBlock Text="الماكينة المستهدفة للطباعة:" FontWeight="SemiBold" FontSize="12" Foreground="{StaticResource TextMuted}" Margin="0,0,0,4" />
+                                    <ComboBox ItemsSource="{Binding AvailablePrinters}" SelectedValuePath="WindowsPrinterName" SelectedValue="{Binding SelectedPrinterName}" DisplayMemberPath="WindowsPrinterName" />
+                                </StackPanel>
+
+                                <!-- Order Notes -->
+                                <StackPanel Grid.Column="2">
+                                    <TextBlock Text="ملاحظات الطلب أو التسليم:" FontWeight="SemiBold" FontSize="12" Foreground="{StaticResource TextMuted}" Margin="0,0,0,4" />
+                                    <TextBox Text="{Binding OrderNotes, UpdateSourceTrigger=PropertyChanged}" />
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
+                        <!-- Main Dual-Pane: Books Catalog & Selected Draft (Proportional Widths) -->
+                        <Grid MinHeight="380">
+                            <Grid.ColumnDefinitions>
+                                <!-- Right Pane: Catalog / Available Books -->
+                                <ColumnDefinition Width="1*" MinWidth="320" />
+                                <!-- Splitter separator -->
+                                <ColumnDefinition Width="16" />
+                                <!-- Left Pane: Selected Items in Order -->
+                                <ColumnDefinition Width="1.3*" MinWidth="380" />
+                            </Grid.ColumnDefinitions>
+
+                            <!-- Right Pane: Catalog -->
+                            <Border Grid.Column="0" Background="{StaticResource BgPrimary}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="12">
+                                <DockPanel LastChildFill="True">
+                                    <TextBlock DockPanel.Dock="Top" Text="📚 كتالوج الكتب المتاحة (اضغط لإضافة الكتاب)" FontWeight="Bold" FontSize="14" Margin="0,0,0,8" Foreground="{StaticResource AccentBrush}" />
+
+                                    <!-- Search & Filters -->
+                                    <StackPanel DockPanel.Dock="Top" Margin="0,0,0,10">
+                                        <TextBox Text="{Binding CatalogSearch, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,6" ToolTip="ابحث باسم الكتاب أو المادة أو الصف..." />
+
+                                        <Grid Margin="0,0,0,8">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,6,0">
+                                                <TextBlock Text="الصف الدراسي:" FontSize="11" Foreground="{StaticResource TextMuted}" Margin="0,0,0,2" />
+                                                <ComboBox ItemsSource="{Binding CatalogGrades}" SelectedItem="{Binding CatalogGrade}" />
                                             </StackPanel>
-                                        </Border>
+                                            <StackPanel Grid.Column="1">
+                                                <TextBlock Text="المادة:" FontSize="11" Foreground="{StaticResource TextMuted}" Margin="0,0,0,2" />
+                                                <ComboBox ItemsSource="{Binding CatalogSubjects}" SelectedItem="{Binding CatalogSubject}" />
+                                            </StackPanel>
+                                        </Grid>
 
-                                        <!-- Selected Draft Items List -->
-                                        <ItemsControl ItemsSource="{Binding DraftItems}">
+                                        <!-- Quick batch add button -->
+                                        <Button Content="⚡ إضافة جميع كتب هذا الصف للطلب دفعة واحدة" Style="{StaticResource GhostButton}" Click="BtnAddAllFiltered_Click" FontSize="12" Padding="8,6" />
+                                    </StackPanel>
+
+                                    <!-- Books List -->
+                                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                        <ItemsControl ItemsSource="{Binding FilteredBooks}">
                                             <ItemsControl.ItemTemplate>
                                                 <DataTemplate>
-                                                    <Border Background="{StaticResource BgSecondary}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="12" Margin="0,0,0,8">
+                                                    <Border Background="{StaticResource BgSecondary}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="6" Padding="10" Margin="0,0,0,6">
                                                         <Grid>
-                                                            <Grid.RowDefinitions>
-                                                                <RowDefinition Height="Auto" />
-                                                                <RowDefinition Height="Auto" />
-                                                            </Grid.RowDefinitions>
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="*" />
+                                                                <ColumnDefinition Width="Auto" />
+                                                            </Grid.ColumnDefinitions>
 
-                                                            <!-- Book Header & Remove Button -->
-                                                            <Grid Grid.Row="0">
-                                                                <Grid.ColumnDefinitions>
-                                                                    <ColumnDefinition Width="*" />
-                                                                    <ColumnDefinition Width="Auto" />
-                                                                </Grid.ColumnDefinitions>
-
-                                                                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                                                                    <TextBlock Text="{Binding Book.Title}" FontWeight="Bold" FontSize="14" Foreground="White" />
-                                                                    <TextBlock Text=" (" Foreground="{StaticResource TextMuted}" />
-                                                                    <TextBlock Text="{Binding Book.Grade}" Foreground="{StaticResource TextMuted}" />
-                                                                    <TextBlock Text=" - " Foreground="{StaticResource TextMuted}" />
-                                                                    <TextBlock Text="{Binding Book.Subject}" Foreground="{StaticResource TextMuted}" />
-                                                                    <TextBlock Text=" | " Foreground="{StaticResource TextMuted}" />
-                                                                    <TextBlock Text="{Binding Book.PageCount}" Foreground="{StaticResource AccentBrush}" FontWeight="Bold" />
-                                                                    <TextBlock Text=" صفحة)" Foreground="{StaticResource TextMuted}" />
+                                                            <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                                                <TextBlock Text="{Binding Title}" FontWeight="Bold" FontSize="13" Foreground="White" TextTrimming="CharacterEllipsis" ToolTip="{Binding Title}" />
+                                                                <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                                                    <Border Background="{StaticResource BgTertiary}" CornerRadius="4" Padding="6,2" Margin="0,0,6,0">
+                                                                        <TextBlock Text="{Binding Grade}" FontSize="11" Foreground="{StaticResource TextMuted}" />
+                                                                    </Border>
+                                                                    <Border Background="{StaticResource BgTertiary}" CornerRadius="4" Padding="6,2" Margin="0,0,6,0">
+                                                                        <TextBlock Text="{Binding Subject}" FontSize="11" Foreground="{StaticResource TextMuted}" />
+                                                                    </Border>
+                                                                    <Border Background="#14532D" CornerRadius="4" Padding="6,2">
+                                                                        <TextBlock Text="{Binding PageCount, StringFormat='📄 {0} صفحة'}" FontSize="11" Foreground="#86EFAC" FontWeight="SemiBold" />
+                                                                    </Border>
                                                                 </StackPanel>
+                                                            </StackPanel>
 
-                                                                <Button Grid.Column="1" Content="🗑️ حذف" Style="{StaticResource DangerButton}" Padding="8,3" FontSize="11" Click="BtnRemoveDraftItem_Click" />
-                                                            </Grid>
-
-                                                            <!-- Print Controls -->
-                                                            <UniformGrid Grid.Row="1" Columns="5" Margin="0,10,0,0">
-                                                                <!-- Copies Counter with [-] and [+] -->
-                                                                <StackPanel Margin="0,0,8,0">
-                                                                    <TextBlock Text="عدد النسخ:" FontSize="11" Foreground="{StaticResource TextMuted}" Margin="0,0,0,2" />
-                                                                    <Grid>
-                                                                        <Grid.ColumnDefinitions>
-                                                                            <ColumnDefinition Width="28" />
-                                                                            <ColumnDefinition Width="*" />
-                                                                            <ColumnDefinition Width="28" />
-                                                                        </Grid.ColumnDefinitions>
-                                                                        <Button Grid.Column="0" Content="-" Padding="0" Click="BtnDecrementCopies_Click" Style="{StaticResource GhostButton}" />
-                                                                        <TextBox Grid.Column="1" Text="{Binding Copies, UpdateSourceTrigger=PropertyChanged}" TextAlignment="Center" Margin="2,0" />
-                                                                        <Button Grid.Column="2" Content="+" Padding="0" Click="BtnIncrementCopies_Click" Style="{StaticResource GhostButton}" />
-                                                                    </Grid>
-                                                                </StackPanel>
-
-                                                                <!-- Paper Size -->
-                                                                <StackPanel Margin="0,0,8,0">
-                                                                    <TextBlock Text="مقاس الورق:" FontSize="11" Foreground="{StaticResource TextMuted}" Margin="0,0,0,2" />
-                                                                    <ComboBox SelectedItem="{Binding PaperSize}">
-                                                                        <enums:PaperSizeOption>A4</enums:PaperSizeOption>
-                                                                        <enums:PaperSizeOption>B5</enums:PaperSizeOption>
-                                                                        <enums:PaperSizeOption>Custom</enums:PaperSizeOption>
-                                                                    </ComboBox>
-                                                                </StackPanel>
-
-                                                                <!-- Duplex -->
-                                                                <StackPanel Margin="0,0,8,0">
-                                                                    <TextBlock Text="الوجهين:" FontSize="11" Foreground="{StaticResource TextMuted}" Margin="0,0,0,2" />
-                                                                    <ComboBox SelectedItem="{Binding Duplex}">
-                                                                        <enums:PrintDuplexOption>DuplexLongEdge</enums:PrintDuplexOption>
-                                                                        <enums:PrintDuplexOption>Simplex</enums:PrintDuplexOption>
-                                                                        <enums:PrintDuplexOption>DuplexShortEdge</enums:PrintDuplexOption>
-                                                                    </ComboBox>
-                                                                </StackPanel>
-
-                                                                <!-- Color -->
-                                                                <StackPanel Margin="0,0,8,0">
-                                                                    <TextBlock Text="الألوان:" FontSize="11" Foreground="{StaticResource TextMuted}" Margin="0,0,0,2" />
-                                                                    <ComboBox SelectedItem="{Binding ColorMode}">
-                                                                        <enums:PrintColorOption>Monochrome</enums:PrintColorOption>
-                                                                        <enums:PrintColorOption>Color</enums:PrintColorOption>
-                                                                    </ComboBox>
-                                                                </StackPanel>
-
-                                                                <!-- Estimated Sheets -->
-                                                                <StackPanel VerticalAlignment="Center">
-                                                                    <TextBlock Text="الأوراق المقدرة:" FontSize="11" Foreground="{StaticResource TextMuted}" />
-                                                                    <TextBlock Text="{Binding EstimatedSheets, StringFormat='📄 {0} ورقة'}" FontWeight="Bold" Foreground="{StaticResource SuccessBrush}" FontSize="13" Margin="0,4,0,0" />
-                                                                </StackPanel>
-                                                            </UniformGrid>
+                                                            <Button Grid.Column="1" Content="➕ أضف" Style="{StaticResource PrimaryButton}" VerticalAlignment="Center" Padding="12,6" FontSize="12" Click="BtnAddBookItem_Click" Margin="8,0,0,0" />
                                                         </Grid>
                                                     </Border>
                                                 </DataTemplate>
                                             </ItemsControl.ItemTemplate>
                                         </ItemsControl>
-                                    </StackPanel>
-                                </ScrollViewer>
-                            </DockPanel>
-                        </Border>
-                    </Grid>
-                </DockPanel>
-            </Border>
+                                    </ScrollViewer>
+                                </DockPanel>
+                            </Border>
+
+                            <!-- Left Pane: Selected Order Items with Print Settings -->
+                            <Border Grid.Column="2" Background="{StaticResource BgPrimary}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="12">
+                                <DockPanel LastChildFill="True">
+                                    <Grid DockPanel.Dock="Top" Margin="0,0,0,10">
+                                        <TextBlock Text="🛒 الكتب المضافة للطلب وإعدادات الطباعة:" FontWeight="Bold" FontSize="14" Foreground="{StaticResource SuccessBrush}" VerticalAlignment="Center" />
+                                    </Grid>
+
+                                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                        <StackPanel>
+                                            <!-- Empty State Notice -->
+                                            <Border Background="{StaticResource BgSecondary}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="32,24" Margin="0,20,0,0"
+                                                    Visibility="{Binding DraftItems.Count, Converter={StaticResource BoolToVis}, ConverterParameter=Inverse}">
+                                                <StackPanel HorizontalAlignment="Center">
+                                                    <TextBlock Text="📖" FontSize="36" HorizontalAlignment="Center" Margin="0,0,0,8" />
+                                                    <TextBlock Text="لم يتم اختيار أي كتب للطلب بعد!" FontSize="15" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center" />
+                                                    <TextBlock Text="اختر الكتب المطلوبة للعميل من قائمة الكتالوج على اليمين ➡️ بالضغط على '➕ أضف'" FontSize="12" Foreground="{StaticResource TextMuted}" HorizontalAlignment="Center" Margin="0,4,0,0" />
+                                                </StackPanel>
+                                            </Border>
+
+                                            <!-- Selected Draft Items List -->
+                                            <ItemsControl ItemsSource="{Binding DraftItems}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Border Background="{StaticResource BgSecondary}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="12" Margin="0,0,0,8">
+                                                            <Grid>
+                                                                <Grid.RowDefinitions>
+                                                                    <RowDefinition Height="Auto" />
+                                                                    <RowDefinition Height="Auto" />
+                                                                </Grid.RowDefinitions>
+
+                                                                <!-- Book Header & Remove Button -->
+                                                                <Grid Grid.Row="0">
+                                                                    <Grid.ColumnDefinitions>
+                                                                        <ColumnDefinition Width="*" />
+                                                                        <ColumnDefinition Width="Auto" />
+                                                                    </Grid.ColumnDefinitions>
+
+                                                                    <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                                                        <TextBlock Text="{Binding Book.Title}" FontWeight="Bold" FontSize="14" Foreground="White" TextTrimming="CharacterEllipsis" ToolTip="{Binding Book.Title}" />
+                                                                        <TextBlock Text=" (" Foreground="{StaticResource TextMuted}" />
+                                                                        <TextBlock Text="{Binding Book.Grade}" Foreground="{StaticResource TextMuted}" />
+                                                                        <TextBlock Text=" - " Foreground="{StaticResource TextMuted}" />
+                                                                        <TextBlock Text="{Binding Book.Subject}" Foreground="{StaticResource TextMuted}" />
+                                                                        <TextBlock Text=" | " Foreground="{StaticResource TextMuted}" />
+                                                                        <TextBlock Text="{Binding Book.PageCount}" Foreground="{StaticResource AccentBrush}" FontWeight="Bold" />
+                                                                        <TextBlock Text=" صفحة)" Foreground="{StaticResource TextMuted}" />
+                                                                    </StackPanel>
+
+                                                                    <Button Grid.Column="1" Content="🗑️ حذف" Style="{StaticResource DangerButton}" Padding="8,3" FontSize="11" Click="BtnRemoveDraftItem_Click" Margin="8,0,0,0" />
+                                                                </Grid>
+
+                                                                <!-- Print Controls in a Flexible WrapPanel -->
+                                                                <WrapPanel Grid.Row="1" Margin="0,10,0,0">
+                                                                    <!-- Copies Counter with [-] and [+] -->
+                                                                    <StackPanel Margin="0,0,12,6" Width="120">
+                                                                        <TextBlock Text="عدد النسخ:" FontSize="11" Foreground="{StaticResource TextMuted}" Margin="0,0,0,2" />
+                                                                        <Grid>
+                                                                            <Grid.ColumnDefinitions>
+                                                                                <ColumnDefinition Width="28" />
+                                                                                <ColumnDefinition Width="*" />
+                                                                                <ColumnDefinition Width="28" />
+                                                                            </Grid.ColumnDefinitions>
+                                                                            <Button Grid.Column="0" Content="-" Padding="0" Click="BtnDecrementCopies_Click" Style="{StaticResource GhostButton}" />
+                                                                            <TextBox Grid.Column="1" Text="{Binding Copies, UpdateSourceTrigger=PropertyChanged}" TextAlignment="Center" Margin="2,0" />
+                                                                            <Button Grid.Column="2" Content="+" Padding="0" Click="BtnIncrementCopies_Click" Style="{StaticResource GhostButton}" />
+                                                                        </Grid>
+                                                                    </StackPanel>
+
+                                                                    <!-- Paper Size -->
+                                                                    <StackPanel Margin="0,0,12,6" Width="100">
+                                                                        <TextBlock Text="مقاس الورق:" FontSize="11" Foreground="{StaticResource TextMuted}" Margin="0,0,0,2" />
+                                                                        <ComboBox SelectedItem="{Binding PaperSize}">
+                                                                            <enums:PaperSizeOption>A4</enums:PaperSizeOption>
+                                                                            <enums:PaperSizeOption>B5</enums:PaperSizeOption>
+                                                                            <enums:PaperSizeOption>Custom</enums:PaperSizeOption>
+                                                                        </ComboBox>
+                                                                    </StackPanel>
+
+                                                                    <!-- Duplex -->
+                                                                    <StackPanel Margin="0,0,12,6" Width="130">
+                                                                        <TextBlock Text="الوجهين:" FontSize="11" Foreground="{StaticResource TextMuted}" Margin="0,0,0,2" />
+                                                                        <ComboBox SelectedItem="{Binding Duplex}">
+                                                                            <enums:PrintDuplexOption>DuplexLongEdge</enums:PrintDuplexOption>
+                                                                            <enums:PrintDuplexOption>Simplex</enums:PrintDuplexOption>
+                                                                            <enums:PrintDuplexOption>DuplexShortEdge</enums:PrintDuplexOption>
+                                                                        </ComboBox>
+                                                                    </StackPanel>
+
+                                                                    <!-- Color -->
+                                                                    <StackPanel Margin="0,0,12,6" Width="110">
+                                                                        <TextBlock Text="الألوان:" FontSize="11" Foreground="{StaticResource TextMuted}" Margin="0,0,0,2" />
+                                                                        <ComboBox SelectedItem="{Binding ColorMode}">
+                                                                            <enums:PrintColorOption>Monochrome</enums:PrintColorOption>
+                                                                            <enums:PrintColorOption>Color</enums:PrintColorOption>
+                                                                        </ComboBox>
+                                                                    </StackPanel>
+
+                                                                    <!-- Estimated Sheets -->
+                                                                    <StackPanel VerticalAlignment="Center" Margin="0,0,8,6">
+                                                                        <TextBlock Text="الأوراق المقدرة:" FontSize="11" Foreground="{StaticResource TextMuted}" />
+                                                                        <TextBlock Text="{Binding EstimatedSheets, StringFormat='📄 {0} ورقة'}" FontWeight="Bold" Foreground="{StaticResource SuccessBrush}" FontSize="13" Margin="0,4,0,0" />
+                                                                    </StackPanel>
+                                                                </WrapPanel>
+                                                            </Grid>
+                                                        </Border>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </StackPanel>
+                                    </ScrollViewer>
+                                </DockPanel>
+                            </Border>
+                        </Grid>
+                    </DockPanel>
+                </Border>
+            </ScrollViewer>
         </Grid>
     </Grid>
 </UserControl>

@@ -85,4 +85,37 @@ public partial class OrdersView : UserControl
             }
         }
     }
+
+    private async void BtnDeleteOrder_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button btn && btn.DataContext is Order order && DataContext is OrdersViewModel vm)
+        {
+            var result = MessageBox.Show(
+                $"هل أنت متأكد من رغبتك في حذف هذا الطلب نهائياً؟\n\nرقم الطلب: {order.OrderNumber}\nاسم العميل: {order.CustomerName}\nعدد الكتب: {order.TotalItemsCount}\n\nتنبيه: سيتم مسح الطلب وجميع مهام الطباعة التابعة له من النظام.",
+                "تأكيد حذف الطلب",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question,
+                MessageBoxResult.No);
+
+            if (result == MessageBoxResult.Yes)
+            {
+                try
+                {
+                    var deleted = await vm.DeleteOrderAsync(order);
+                    if (deleted)
+                    {
+                        MessageBox.Show($"تم حذف الطلب {order.OrderNumber} بنجاح.", "تم الحذف", MessageBoxButton.OK, MessageBoxImage.Information);
+                    }
+                    else
+                    {
+                        MessageBox.Show("تعذر حذف الطلب، قد يكون قد تم حذفه مسبقاً.", "تنبيه", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"حدث خطأ أثناء محاولة مسح الطلب: {ex.Message}", "خطأ في الحذف", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+            }
+        }
+    }
 }

@@ -166,4 +166,73 @@ public class OrderManagementTests : IDisposable
         Assert.False(result.IsValid);
         Assert.Contains(result.Issues, i => i.Contains("غير موجود"));
     }
+
+    [Fact]
+    public async Task DeleteOrderAsync_ExistingOrderWithPrintJobs_DeletesSuccessfullyWithoutForeignKeyViolation()
+    {
+        var cust = await _customerService.CreateCustomerAsync("خالد علي", "01234567890");
+        var pdf = CreateTestPdf("history.pdf", 10);
+
+        long bookId;
+        using (var conn = _dbService.CreateConnection())
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = "INSERT INTO Books (Title, Grade, Subject, FilePath, FileName, FileHash, FileSizeBytes, PageCount, LastScannedAt) VALUES ('تاريخ', 'الثاني الثانوي', 'تاريخ', @p, 'history.pdf', 'h3', 100, 10, @now) RETURNING Id;";
+            cmd.Parameters.AddWithValue("@p", pdf);
+            cmd.Parameters.AddWithValue("@now", DateTime.UtcNow.ToString("o"));
+            bookId = Convert.ToInt64(await cmd.ExecuteScalarAsync());
+        }
+
+        var order = new Order
+        {
+            CustomerId = cust.Id,
+            CustomerName = cust.FullName,
+            CustomerPhone = cust.PhoneNumber,
+            Items = new List<OrderItem>
+            {
+                new OrderItem
+                {
+                    BookId = bookId,
+                    BookTitle = "تاريخ",
+                    Grade = "الثاني الثانوي",
+                    Subject = "تاريخ",
+                    FilePath = pdf,
+                    PageCount = 10,
+                    Copies = 2,
+                    PaperSize = PaperSizeOption.A4,
+                    Duplex = PrintDuplexOption.Simplex
+                }
+            }
+        };
+
+        var created = await _orderService.CreateOrderAsync(order);
+        Assert.True(created.Id > 0);
+
+        // Verify order exists
+        var fetched = await _orderService.GetOrderByIdAsync(created.Id);
+        Assert.NotNull(fetched);
+
+        // Execute Delete
+        var deleted = await _orderService.DeleteOrderAsync(created.Id);
+        Assert.True(deleted);
+
+        // Verify order is removed from database
+        var afterDelete = await _orderService.GetOrderByIdAsync(created.Id);
+        Assert.Null(afterDelete);
+
+        // Verify child tables were cleaned up
+        using (var conn = _dbService.CreateConnection())
+        {
+            using var cmd1 = conn.CreateCommand();
+            cmd1.CommandText = "SELECT COUNT(*) FROM OrderItems WHERE OrderId = @id";
+            cmd1.Parameters.AddWithValue("@id", created.Id);
+            Assert.Equal(0L, Convert.ToInt64(await cmd1.ExecuteScalarAsync()));
+
+            using var cmd2 = conn.CreateCommand();
+            cmd2.CommandText = "SELECT COUNT(*) FROM PrintJobs WHERE OrderId = @id";
+            cmd2.Parameters.AddWithValue("@id", created.Id);
+            Assert.Equal(0L, Convert.ToInt64(await cmd2.ExecuteScalarAsync()));
+        }
+    }
 }
+

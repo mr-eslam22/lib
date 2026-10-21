@@ -351,13 +351,22 @@ public class OrdersViewModel : ViewModelBase
     private string _catalogSearch = string.Empty;
     private string _catalogGrade = "الكل";
     private string _catalogSubject = "الكل";
+    private string _statusFilter = "الكل";
 
     public string SearchQuery { get => _searchQuery; set { SetProperty(ref _searchQuery, value); _ = LoadOrdersAsync(); } }
+    public string StatusFilter { get => _statusFilter; set { if (SetProperty(ref _statusFilter, value)) _ = LoadOrdersAsync(); } }
     public Order? SelectedOrder { get => _selectedOrder; set => SetProperty(ref _selectedOrder, value); }
     public Customer? SelectedCustomer { get => _selectedCustomer; set => SetProperty(ref _selectedCustomer, value); }
     public string OrderNotes { get => _orderNotes; set => SetProperty(ref _orderNotes, value); }
     public DateTime? DeliveryDate { get => _deliveryDate; set => SetProperty(ref _deliveryDate, value); }
     public string? SelectedPrinterName { get => _selectedPrinterName; set => SetProperty(ref _selectedPrinterName, value); }
+
+    public ObservableCollection<string> StatusFilters { get; } = new()
+    {
+        "الكل",
+        "مكتمل فقط ✅",
+        "غير مكتمل (قيد التنفيذ والانتظار) ⏳"
+    };
 
     public string CatalogSearch
     {
@@ -415,8 +424,32 @@ public class OrdersViewModel : ViewModelBase
     public async Task LoadOrdersAsync()
     {
         Orders.Clear();
-        var list = await _orderService.GetOrdersAsync(searchQuery: SearchQuery);
+        OrderStatus? filter = null;
+        if (StatusFilter == "مكتمل فقط ✅") filter = OrderStatus.Completed;
+
+        var list = await _orderService.GetOrdersAsync(status: filter, searchQuery: SearchQuery);
+
+        if (StatusFilter == "غير مكتمل (قيد التنفيذ والانتظار) ⏳")
+        {
+            list = list.Where(o => o.Status != OrderStatus.Completed).ToList();
+        }
+
         foreach (var o in list) Orders.Add(o);
+    }
+
+    public async Task<bool> DeleteOrderAsync(Order order)
+    {
+        if (order == null) return false;
+        var success = await _orderService.DeleteOrderAsync(order.Id);
+        if (success)
+        {
+            if (SelectedOrder?.Id == order.Id)
+            {
+                SelectedOrder = null;
+            }
+            await LoadOrdersAsync();
+        }
+        return success;
     }
 
     public async Task PrepareNewOrderAsync()

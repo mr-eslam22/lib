@@ -52,6 +52,46 @@ public class Order
     public int TotalItemsCount { get; set; }
     public int TotalEstimatedSheets { get; set; }
     public List<OrderItem> Items { get; set; } = new();
+
+    public string StatusTextArabic => Status switch
+    {
+        OrderStatus.Completed => "مكتمل ✅",
+        OrderStatus.InProgress => "جاري الطباعة ⏳",
+        OrderStatus.Pending => "قيد الانتظار ⏳",
+        OrderStatus.PartiallyCompleted => "مكتمل جزئياً ⚠️",
+        OrderStatus.Cancelled => "ملغي ❌",
+        OrderStatus.RecoveryRequired => "يلزم استعادة ⚠️",
+        OrderStatus.Draft => "مسودة 📝",
+        _ => Status.ToString()
+    };
+
+    public string CustomerCompletionText => Status == OrderStatus.Completed
+        ? "مكتمل وجاهز للتسليم ✅"
+        : (Status == OrderStatus.Cancelled ? "طلب ملغي ❌" : "غير مكتمل (قيد التنفيذ) ⏳");
+
+    public string StatusBadgeBackground => Status switch
+    {
+        OrderStatus.Completed => "#14532D", // Dark Emerald Green
+        OrderStatus.InProgress => "#0369A1", // Vibrant Sky Blue
+        OrderStatus.Pending => "#78350F", // Amber
+        OrderStatus.PartiallyCompleted => "#854D0E", // Warm Yellow
+        OrderStatus.Cancelled => "#7F1D1D", // Dark Red
+        OrderStatus.RecoveryRequired => "#991B1B", // Bright Crimson
+        _ => "#1E293B"
+    };
+
+    public string StatusBadgeForeground => Status switch
+    {
+        OrderStatus.Completed => "#86EFAC", // Bright Mint Green
+        OrderStatus.InProgress => "#7DD3FC", // Bright Sky Blue
+        OrderStatus.Pending => "#FDE68A", // Bright Amber
+        OrderStatus.PartiallyCompleted => "#FEF08A", // Bright Yellow
+        OrderStatus.Cancelled => "#FCA5A5", // Soft Red
+        OrderStatus.RecoveryRequired => "#FECACA", // Light Red
+        _ => "#F8FAFC"
+    };
+
+    public bool IsCompleted => Status == OrderStatus.Completed;
 }
 
 public class OrderItem

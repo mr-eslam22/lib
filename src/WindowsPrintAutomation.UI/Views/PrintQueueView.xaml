@@ -21,7 +21,8 @@
 
         <!-- Queue Table -->
         <Border Grid.Row="1" Style="{StaticResource CardPanel}">
-            <DataGrid ItemsSource="{Binding ActiveJobs}" SelectedItem="{Binding SelectedJob}">
+            <DataGrid ItemsSource="{Binding ActiveJobs}" SelectedItem="{Binding SelectedJob}"
+                      ScrollViewer.HorizontalScrollBarVisibility="Auto" ScrollViewer.VerticalScrollBarVisibility="Auto">
                 <DataGrid.Columns>
                     <DataGridTextColumn Header="رقم المهمة" Binding="{Binding JobNumber}" Width="150" />
                     <DataGridTextColumn Header="الماكينة" Binding="{Binding PrinterName}" Width="160" />

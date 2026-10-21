@@ -6,6 +6,7 @@ using WindowsPrintAutomation.Core.Services;
 using WindowsPrintAutomation.PrintEngine;
 using WindowsPrintAutomation.PrintEngine.Adapters;
 using WindowsPrintAutomation.PrintEngine.Interfaces;
+using WindowsPrintAutomation.PrintEngine.Services;
 using Xunit;
 
 namespace WindowsPrintAutomation.Tests;

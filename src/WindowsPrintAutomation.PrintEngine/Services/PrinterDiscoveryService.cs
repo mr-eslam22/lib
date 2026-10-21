@@ -2,7 +2,7 @@ using System.Management;
 using System.Printing;
 using WindowsPrintAutomation.Core.Domain.Entities;
 
-namespace WindowsPrintAutomation.Core.Services;
+namespace WindowsPrintAutomation.PrintEngine.Services;
 
 public class DiscoveredPrinterInfo
 {
@@ -136,7 +136,6 @@ public class PrinterDiscoveryService : IPrinterDiscoveryService
             return port.Substring(3);
         }
 
-        // check standard IP pattern
         var parts = port.Split('.');
         if (parts.Length == 4 && parts.All(p => int.TryParse(p, out _)))
         {

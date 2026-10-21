@@ -5,6 +5,7 @@ using WindowsPrintAutomation.Core.Domain.Entities;
 using WindowsPrintAutomation.Core.Domain.Enums;
 using WindowsPrintAutomation.Core.Services;
 using WindowsPrintAutomation.PrintEngine;
+using WindowsPrintAutomation.PrintEngine.Services;
 
 namespace WindowsPrintAutomation.UI.ViewModels;
 

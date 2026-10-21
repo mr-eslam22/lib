@@ -1,6 +1,7 @@
 using System.Management;
 using System.Printing;
 using System.Runtime.InteropServices;
+using WindowsPrintAutomation.Core.Domain.Entities;
 using WindowsPrintAutomation.Core.Domain.Enums;
 using WindowsPrintAutomation.PrintEngine.Interfaces;
 

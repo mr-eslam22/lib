@@ -52,20 +52,43 @@ public class PrintEngineAndQueueTests : IDisposable
     private async Task<(long OrderId, long OrderItemId, long JobId)> CreateJobAsync(string printerName, string pdfPath, int copies = 10)
     {
         using var conn = _dbService.CreateConnection();
+        var now = DateTime.UtcNow.ToString("o");
+
+        long custId;
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = "INSERT INTO Customers (CustomerCode, FullName, PhoneNumber, CreatedAt) VALUES (@code, 'عميل', '010', @now) RETURNING Id;";
+            cmd.Parameters.AddWithValue("@code", $"CUST-{Guid.NewGuid():N}");
+            cmd.Parameters.AddWithValue("@now", now);
+            custId = Convert.ToInt64(await cmd.ExecuteScalarAsync());
+        }
+
+        long bookId;
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = "INSERT INTO Books (Title, Grade, Subject, FilePath, FileName, FileHash, FileSizeBytes, PageCount, LastScannedAt) VALUES ('كتاب', 'الأول', 'عربي', @p, 'book.pdf', @hash, 100, 5, @now) RETURNING Id;";
+            cmd.Parameters.AddWithValue("@p", pdfPath);
+            cmd.Parameters.AddWithValue("@hash", Guid.NewGuid().ToString("N"));
+            cmd.Parameters.AddWithValue("@now", now);
+            bookId = Convert.ToInt64(await cmd.ExecuteScalarAsync());
+        }
 
         long ordId;
         using (var cmd = conn.CreateCommand())
         {
-            cmd.CommandText = "INSERT INTO Orders (OrderNumber, CustomerId, CustomerName, CustomerPhone, CreatedAt) VALUES ('ORD-01', 1, 'عميل', '010', @now) RETURNING Id;";
-            cmd.Parameters.AddWithValue("@now", DateTime.UtcNow.ToString("o"));
+            cmd.CommandText = "INSERT INTO Orders (OrderNumber, CustomerId, CustomerName, CustomerPhone, CreatedAt) VALUES (@ordNum, @cId, 'عميل', '010', @now) RETURNING Id;";
+            cmd.Parameters.AddWithValue("@ordNum", $"ORD-{Guid.NewGuid():N}");
+            cmd.Parameters.AddWithValue("@cId", custId);
+            cmd.Parameters.AddWithValue("@now", now);
             ordId = Convert.ToInt64(await cmd.ExecuteScalarAsync());
         }
 
         long itemId;
         using (var cmd = conn.CreateCommand())
         {
-            cmd.CommandText = "INSERT INTO OrderItems (OrderId, BookId, BookTitle, Grade, Subject, FilePath, PageCount, Copies, Status, RemainingCopies) VALUES (@oId, 1, 'كتاب', 'الأول', 'عربي', @p, 5, @c, 0, @c) RETURNING Id;";
+            cmd.CommandText = "INSERT INTO OrderItems (OrderId, BookId, BookTitle, Grade, Subject, FilePath, PageCount, Copies, Status, RemainingCopies) VALUES (@oId, @bId, 'كتاب', 'الأول', 'عربي', @p, 5, @c, 0, @c) RETURNING Id;";
             cmd.Parameters.AddWithValue("@oId", ordId);
+            cmd.Parameters.AddWithValue("@bId", bookId);
             cmd.Parameters.AddWithValue("@p", pdfPath);
             cmd.Parameters.AddWithValue("@c", copies);
             itemId = Convert.ToInt64(await cmd.ExecuteScalarAsync());
@@ -74,13 +97,14 @@ public class PrintEngineAndQueueTests : IDisposable
         long jobId;
         using (var cmd = conn.CreateCommand())
         {
-            cmd.CommandText = "INSERT INTO PrintJobs (JobNumber, OrderId, OrderItemId, PrinterName, Status, VerificationStatus, CopiesRequested, CopiesRemaining, PageCount, CreatedAt) VALUES ('JOB-01', @oId, @iId, @pr, 0, @vSt, @c, @c, 5, @now) RETURNING Id;";
+            cmd.CommandText = "INSERT INTO PrintJobs (JobNumber, OrderId, OrderItemId, PrinterName, Status, VerificationStatus, CopiesRequested, CopiesRemaining, PageCount, CreatedAt) VALUES (@jobNum, @oId, @iId, @pr, 0, @vSt, @c, @c, 5, @now) RETURNING Id;";
+            cmd.Parameters.AddWithValue("@jobNum", $"JOB-{Guid.NewGuid():N}");
             cmd.Parameters.AddWithValue("@oId", ordId);
             cmd.Parameters.AddWithValue("@iId", itemId);
             cmd.Parameters.AddWithValue("@pr", printerName);
             cmd.Parameters.AddWithValue("@vSt", (int)VerificationStatus.NeedsVerification);
             cmd.Parameters.AddWithValue("@c", copies);
-            cmd.Parameters.AddWithValue("@now", DateTime.UtcNow.ToString("o"));
+            cmd.Parameters.AddWithValue("@now", now);
             jobId = Convert.ToInt64(await cmd.ExecuteScalarAsync());
         }
 

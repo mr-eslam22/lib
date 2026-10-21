@@ -62,13 +62,13 @@ public class MultiVendorAdapterTests : IDisposable
         Assert.Equal(CapabilityStatus.VerifiedSupported, kyoReport.A4Support);
         Assert.Equal(CapabilityStatus.VerifiedSupported, kyoReport.B5Support); // B5 confirmed!
         Assert.Equal(CapabilityStatus.VerifiedSupported, kyoReport.DuplexSupport);
-        Assert.Contains(kyoReport.ConfirmedCapabilitiesList, c => c.Contains("B5"));
+        Assert.True(kyoReport.ConfirmedCapabilitiesList.Any(c => c.Contains("B5")));
 
         // HP LaserJet probe:
         var hpReport = fakeAdapter.ProbeCapabilities("HP Color LaserJet Enterprise M553");
         Assert.Equal(CapabilityStatus.VerifiedSupported, hpReport.A4Support);
         Assert.Equal(CapabilityStatus.UnconfirmedOrUnknown, hpReport.B5Support); // B5 unconfirmed by default on standard A4 tray!
-        Assert.Contains(hpReport.UnconfirmedCapabilitiesList, c => c.Contains("B5"));
+        Assert.True(hpReport.UnconfirmedCapabilitiesList.Any(c => c.Contains("B5")));
 
         // Generic printer probe:
         var genReport = fakeAdapter.ProbeCapabilities("Generic Windows Virtual Printer");
@@ -148,29 +148,61 @@ public class MultiVendorAdapterTests : IDisposable
         long hpJobId, kyoJobId;
         using (var conn = _dbService.CreateConnection())
         {
-            using var cmd = conn.CreateCommand();
-            cmd.CommandText = "INSERT INTO Orders (OrderNumber, CustomerId, CustomerName, CustomerPhone, CreatedAt) VALUES ('ORD-MV-1', 1, 'عميل', '010', @now) RETURNING Id;";
-            cmd.Parameters.AddWithValue("@now", DateTime.UtcNow.ToString("o"));
-            var ordId = Convert.ToInt64(await cmd.ExecuteScalarAsync());
+            var now = DateTime.UtcNow.ToString("o");
 
-            using var itemCmd = conn.CreateCommand();
-            itemCmd.CommandText = "INSERT INTO OrderItems (OrderId, BookId, BookTitle, Grade, Subject, FilePath, PageCount, Copies, Status, RemainingCopies) VALUES (@oId, 1, 'كتاب', 'الأول', 'عربي', @p, 1, 5, 0, 5) RETURNING Id;";
-            itemCmd.Parameters.AddWithValue("@oId", ordId);
-            itemCmd.Parameters.AddWithValue("@p", pdfPath);
-            var itemId = Convert.ToInt64(await itemCmd.ExecuteScalarAsync());
+            long custId;
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = "INSERT INTO Customers (CustomerCode, FullName, PhoneNumber, CreatedAt) VALUES (@code, 'عميل', '010', @now) RETURNING Id;";
+                cmd.Parameters.AddWithValue("@code", $"CUST-{Guid.NewGuid():N}");
+                cmd.Parameters.AddWithValue("@now", now);
+                custId = Convert.ToInt64(await cmd.ExecuteScalarAsync());
+            }
+
+            long bookId;
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = "INSERT INTO Books (Title, Grade, Subject, FilePath, FileName, FileHash, FileSizeBytes, PageCount, LastScannedAt) VALUES ('كتاب', 'الأول', 'عربي', @p, 'sample.pdf', @hash, 100, 1, @now) RETURNING Id;";
+                cmd.Parameters.AddWithValue("@p", pdfPath);
+                cmd.Parameters.AddWithValue("@hash", Guid.NewGuid().ToString("N"));
+                cmd.Parameters.AddWithValue("@now", now);
+                bookId = Convert.ToInt64(await cmd.ExecuteScalarAsync());
+            }
+
+            long ordId;
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = "INSERT INTO Orders (OrderNumber, CustomerId, CustomerName, CustomerPhone, CreatedAt) VALUES (@ordNum, @cId, 'عميل', '010', @now) RETURNING Id;";
+                cmd.Parameters.AddWithValue("@ordNum", $"ORD-{Guid.NewGuid():N}");
+                cmd.Parameters.AddWithValue("@cId", custId);
+                cmd.Parameters.AddWithValue("@now", now);
+                ordId = Convert.ToInt64(await cmd.ExecuteScalarAsync());
+            }
+
+            long itemId;
+            using (var itemCmd = conn.CreateCommand())
+            {
+                itemCmd.CommandText = "INSERT INTO OrderItems (OrderId, BookId, BookTitle, Grade, Subject, FilePath, PageCount, Copies, Status, RemainingCopies) VALUES (@oId, @bId, 'كتاب', 'الأول', 'عربي', @p, 1, 5, 0, 5) RETURNING Id;";
+                itemCmd.Parameters.AddWithValue("@oId", ordId);
+                itemCmd.Parameters.AddWithValue("@bId", bookId);
+                itemCmd.Parameters.AddWithValue("@p", pdfPath);
+                itemId = Convert.ToInt64(await itemCmd.ExecuteScalarAsync());
+            }
 
             using var jCmd1 = conn.CreateCommand();
-            jCmd1.CommandText = "INSERT INTO PrintJobs (JobNumber, OrderId, OrderItemId, PrinterName, Status, VerificationStatus, CopiesRequested, CopiesRemaining, PageCount, CreatedAt) VALUES ('JOB-HP', @oId, @iId, 'HP LaserJet Pro MFP M428fdw', 0, 4, 5, 5, 1, @now) RETURNING Id;";
+            jCmd1.CommandText = "INSERT INTO PrintJobs (JobNumber, OrderId, OrderItemId, PrinterName, Status, VerificationStatus, CopiesRequested, CopiesRemaining, PageCount, CreatedAt) VALUES (@jobNum, @oId, @iId, 'HP LaserJet Pro MFP M428fdw', 0, 4, 5, 5, 1, @now) RETURNING Id;";
+            jCmd1.Parameters.AddWithValue("@jobNum", $"JOB-HP-{Guid.NewGuid():N}");
             jCmd1.Parameters.AddWithValue("@oId", ordId);
             jCmd1.Parameters.AddWithValue("@iId", itemId);
-            jCmd1.Parameters.AddWithValue("@now", DateTime.UtcNow.ToString("o"));
+            jCmd1.Parameters.AddWithValue("@now", now);
             hpJobId = Convert.ToInt64(await jCmd1.ExecuteScalarAsync());
 
             using var jCmd2 = conn.CreateCommand();
-            jCmd2.CommandText = "INSERT INTO PrintJobs (JobNumber, OrderId, OrderItemId, PrinterName, Status, VerificationStatus, CopiesRequested, CopiesRemaining, PageCount, CreatedAt) VALUES ('JOB-KYO', @oId, @iId, 'Kyocera TASKalfa 3212i', 0, 4, 5, 5, 1, @now) RETURNING Id;";
+            jCmd2.CommandText = "INSERT INTO PrintJobs (JobNumber, OrderId, OrderItemId, PrinterName, Status, VerificationStatus, CopiesRequested, CopiesRemaining, PageCount, CreatedAt) VALUES (@jobNum, @oId, @iId, 'Kyocera TASKalfa 3212i', 0, 4, 5, 5, 1, @now) RETURNING Id;";
+            jCmd2.Parameters.AddWithValue("@jobNum", $"JOB-KYO-{Guid.NewGuid():N}");
             jCmd2.Parameters.AddWithValue("@oId", ordId);
             jCmd2.Parameters.AddWithValue("@iId", itemId);
-            jCmd2.Parameters.AddWithValue("@now", DateTime.UtcNow.ToString("o"));
+            jCmd2.Parameters.AddWithValue("@now", now);
             kyoJobId = Convert.ToInt64(await jCmd2.ExecuteScalarAsync());
         }
 

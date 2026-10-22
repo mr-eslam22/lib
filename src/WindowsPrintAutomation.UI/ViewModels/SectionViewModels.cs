@@ -183,7 +183,18 @@ public class LibraryViewModel : ViewModelBase
         }
     }
     public bool HasImportStatus => !string.IsNullOrWhiteSpace(_importStatusMessage);
-    public bool IsScanning { get => _isScanning; set => SetProperty(ref _isScanning, value); }
+    public bool IsScanning
+    {
+        get => _isScanning;
+        set
+        {
+            if (SetProperty(ref _isScanning, value))
+            {
+                OnPropertyChanged(nameof(CanImport));
+            }
+        }
+    }
+    public bool CanImport => !_isScanning;
     public Book? SelectedBook { get => _selectedBook; set => SetProperty(ref _selectedBook, value); }
 
     public ObservableCollection<Book> Books { get; } = new();
@@ -224,20 +235,21 @@ public class LibraryViewModel : ViewModelBase
     public async Task ImportFolderAsync(string folderPath)
     {
         IsScanning = true;
-        ImportStatusMessage = "جاري فحص المجلد واستخراج ملفات PDF...";
+        ImportStatusMessage = "جاري فحص المجلد واستخراج ملفات الكتب...";
 
         var progress = new Progress<string>(msg => ImportStatusMessage = msg);
         try
         {
-            var result = await _libraryService.ImportFolderAsync(folderPath, progress);
-            ImportStatusMessage = $"اكتمل الفحص: إجمالي {result.TotalFilesFound} ملف | استيراد جديد {result.ImportedCount} | تحديث {result.UpdatedCount} | غير مدعوم {result.UnsupportedCount} | تالف {result.CorruptedCount}";
+            // Execute on background worker thread via Task.Run so UI NEVER freezes or hangs!
+            var result = await Task.Run(() => _libraryService.ImportFolderAsync(folderPath, progress));
+            ImportStatusMessage = $"اكتمل الفحص بنجاح: تم فحص {result.TotalFilesFound} ملف | استيراد جديد {result.ImportedCount} | تحديث {result.UpdatedCount} | غير مدعوم {result.UnsupportedCount} | تالف {result.CorruptedCount}";
             await LoadGradesAsync();
             await LoadSubjectsAsync();
             await LoadBooksAsync();
         }
         catch (Exception ex)
         {
-            ImportStatusMessage = $"خطأ أثناء فحص المجلد: {ex.Message}";
+            ImportStatusMessage = $"حدث خطأ أثناء فحص المجلد: {ex.Message}";
         }
         finally
         {

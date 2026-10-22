@@ -66,78 +66,80 @@ public class LibraryService : ILibraryService
             folderId = Convert.ToInt64(returned);
         }
 
+        progress?.Report("جاري حصر وفهرسة الملفات داخل المجلد...");
         var allFiles = Directory.EnumerateFiles(rootFolderPath, "*.*", SearchOption.AllDirectories).ToList();
         result.TotalFilesFound = allFiles.Count;
 
-        foreach (var filePath in allFiles)
+        var pdfFiles = allFiles.Where(f =>
         {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            var ext = Path.GetExtension(filePath).ToLowerInvariant();
-            // Ignore SQLite database, journal, and lock files
+            var ext = Path.GetExtension(f).ToLowerInvariant();
             if (ext is ".db" or ".db-wal" or ".db-shm" or ".tmp" or ".lock" or ".ds_store")
             {
-                continue;
+                return false;
             }
-
             if (ext != ".pdf")
             {
                 result.UnsupportedCount++;
-                continue;
+                return false;
             }
+            return true;
+        }).ToList();
 
-            try
+        progress?.Report($"تم العثور على {pdfFiles.Count} ملف PDF، جاري الفحص السريع...");
+
+        using (var conn = _databaseService.CreateConnection())
+        {
+            using var transaction = conn.BeginTransaction();
+            int processedIndex = 0;
+
+            foreach (var filePath in pdfFiles)
             {
-                var fileInfo = new FileInfo(filePath);
-                if (!fileInfo.Exists)
-                {
-                    result.CorruptedCount++;
-                    result.CorruptedFiles.Add(filePath);
-                    continue;
-                }
-
-                progress?.Report($"جاري فحص: {Path.GetFileName(filePath)}");
-
-                // Parse Grade, Subject, Title from hierarchy
-                var (grade, subject, title) = ExtractMetadataFromPath(rootFolderPath, filePath);
-
-                // Compute hash and page count
-                string fileHash;
-                int pageCount = 0;
+                cancellationToken.ThrowIfCancellationRequested();
+                processedIndex++;
 
                 try
                 {
-                    using (var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                    var fileInfo = new FileInfo(filePath);
+                    if (!fileInfo.Exists || fileInfo.Length == 0)
                     {
-                        using var sha256 = SHA256.Create();
-                        var hashBytes = sha256.ComputeHash(fs);
-                        fileHash = Convert.ToHexString(hashBytes);
-
-                        fs.Position = 0;
-                        using var pdfDoc = PdfDocument.Open(fs);
-                        pageCount = pdfDoc.NumberOfPages;
+                        result.CorruptedCount++;
+                        result.CorruptedFiles.Add(filePath);
+                        continue;
                     }
-                }
-                catch (Exception ex)
-                {
-                    result.CorruptedCount++;
-                    result.CorruptedFiles.Add($"{filePath}: {ex.Message}");
-                    continue;
-                }
 
-                // Insert or Update in SQLite
-                using (var conn = _databaseService.CreateConnection())
-                using (var cmd = conn.CreateCommand())
-                {
-                    cmd.CommandText = @"
-                        SELECT Id FROM Books WHERE FilePath = @path OR FileHash = @hash LIMIT 1";
-                    cmd.Parameters.AddWithValue("@path", filePath);
-                    cmd.Parameters.AddWithValue("@hash", fileHash);
-                    var existingId = await cmd.ExecuteScalarAsync(cancellationToken);
+                    if (processedIndex % 5 == 0 || processedIndex == pdfFiles.Count)
+                    {
+                        progress?.Report($"جاري فحص ({processedIndex} من {pdfFiles.Count}): {Path.GetFileName(filePath)}");
+                    }
+
+                    // Parse Grade, Subject, Title from hierarchy (supports 4 levels, 3 levels, etc.)
+                    var (grade, subject, title) = ExtractMetadataFromPath(rootFolderPath, filePath);
+
+                    // High-speed composite hash (microseconds instead of seconds)
+                    string fileHash = ComputeQuickHash(filePath, fileInfo.Length);
+
+                    // High-speed page count
+                    int pageCount = GetPdfPageCount(filePath);
+
+                    // Check if already in DB
+                    long? existingId = null;
+                    using (var cmd = conn.CreateCommand())
+                    {
+                        cmd.Transaction = transaction;
+                        cmd.CommandText = "SELECT Id FROM Books WHERE FilePath = @path OR FileHash = @hash LIMIT 1";
+                        cmd.Parameters.AddWithValue("@path", filePath);
+                        cmd.Parameters.AddWithValue("@hash", fileHash);
+                        var existing = await cmd.ExecuteScalarAsync(cancellationToken);
+                        if (existing != null)
+                        {
+                            existingId = Convert.ToInt64(existing);
+                        }
+                    }
 
                     if (existingId == null)
                     {
                         using var insertCmd = conn.CreateCommand();
+                        insertCmd.Transaction = transaction;
                         insertCmd.CommandText = @"
                             INSERT INTO Books (Title, Grade, Subject, FilePath, FileName, FileHash, FileSizeBytes, PageCount, IsAvailable, LastScannedAt, FolderId)
                             VALUES (@title, @grade, @subject, @path, @fileName, @hash, @size, @pages, 1, @scanned, @folderId)";
@@ -157,6 +159,7 @@ public class LibraryService : ILibraryService
                     else
                     {
                         using var updateCmd = conn.CreateCommand();
+                        updateCmd.Transaction = transaction;
                         updateCmd.CommandText = @"
                             UPDATE Books SET 
                                 Title = @title,
@@ -170,7 +173,7 @@ public class LibraryService : ILibraryService
                                 LastScannedAt = @scanned,
                                 FolderId = @folderId
                             WHERE Id = @id";
-                        updateCmd.Parameters.AddWithValue("@id", Convert.ToInt64(existingId));
+                        updateCmd.Parameters.AddWithValue("@id", existingId.Value);
                         updateCmd.Parameters.AddWithValue("@title", title);
                         updateCmd.Parameters.AddWithValue("@grade", grade);
                         updateCmd.Parameters.AddWithValue("@subject", subject);
@@ -184,11 +187,13 @@ public class LibraryService : ILibraryService
                         result.UpdatedCount++;
                     }
                 }
+                catch (Exception ex)
+                {
+                    result.Errors.Add($"خطأ في معالجة الملف '{filePath}': {ex.Message}");
+                }
             }
-            catch (Exception ex)
-            {
-                result.Errors.Add($"خطأ في معالجة الملف '{filePath}': {ex.Message}");
-            }
+
+            transaction.Commit();
         }
 
         // Update Folder book count
@@ -215,7 +220,23 @@ public class LibraryService : ILibraryService
         var grade = "غير محدد";
         var subject = "عام";
 
-        if (parts.Length >= 3)
+        if (parts.Length >= 4)
+        {
+            // Structure: Stage (e.g. ابتدائي/اعدادي/ثانوي) / Grade (الصف الأول) / Subject (عربي) / Book.pdf
+            var stage = parts[0];
+            var gradePart = parts[1];
+            subject = parts[2];
+
+            if (gradePart.Contains(stage, StringComparison.OrdinalIgnoreCase))
+            {
+                grade = gradePart;
+            }
+            else
+            {
+                grade = $"{stage} - {gradePart}";
+            }
+        }
+        else if (parts.Length == 3)
         {
             // Structure: Grade / Subject / Title.pdf
             grade = parts[0];
@@ -228,6 +249,99 @@ public class LibraryService : ILibraryService
         }
 
         return (grade, subject, title);
+    }
+
+    private static string ComputeQuickHash(string filePath, long fileSize)
+    {
+        using var sha256 = SHA256.Create();
+        using var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+
+        if (fileSize <= 1024 * 1024)
+        {
+            return Convert.ToHexString(sha256.ComputeHash(fs));
+        }
+
+        using var ms = new MemoryStream();
+        var sizeBytes = BitConverter.GetBytes(fileSize);
+        ms.Write(sizeBytes, 0, sizeBytes.Length);
+
+        byte[] buffer = new byte[64 * 1024];
+
+        // Read first 64 KB
+        int read = fs.Read(buffer, 0, buffer.Length);
+        if (read > 0) ms.Write(buffer, 0, read);
+
+        // Read middle 64 KB
+        if (fileSize > 256 * 1024)
+        {
+            fs.Seek(fileSize / 2, SeekOrigin.Begin);
+            read = fs.Read(buffer, 0, buffer.Length);
+            if (read > 0) ms.Write(buffer, 0, read);
+        }
+
+        // Read last 64 KB
+        if (fileSize > 128 * 1024)
+        {
+            fs.Seek(Math.Max(0, fileSize - buffer.Length), SeekOrigin.Begin);
+            read = fs.Read(buffer, 0, buffer.Length);
+            if (read > 0) ms.Write(buffer, 0, read);
+        }
+
+        ms.Position = 0;
+        return Convert.ToHexString(sha256.ComputeHash(ms));
+    }
+
+    private static int GetPdfPageCount(string filePath)
+    {
+        try
+        {
+            int fastCount = TryQuickGetPageCount(filePath);
+            if (fastCount > 0)
+            {
+                return fastCount;
+            }
+        }
+        catch
+        {
+            // Ignore quick scan error and fall back to PdfPig
+        }
+
+        try
+        {
+            using var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            using var pdfDoc = PdfDocument.Open(fs);
+            return pdfDoc.NumberOfPages;
+        }
+        catch
+        {
+            return 0;
+        }
+    }
+
+    private static int TryQuickGetPageCount(string filePath)
+    {
+        using var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        if (fs.Length == 0) return 0;
+
+        long scanSize = Math.Min(fs.Length, 64 * 1024);
+        fs.Seek(fs.Length - scanSize, SeekOrigin.Begin);
+        byte[] buffer = new byte[scanSize];
+        int read = fs.Read(buffer, 0, buffer.Length);
+        string content = System.Text.Encoding.Latin1.GetString(buffer, 0, read);
+
+        var matches = System.Text.RegularExpressions.Regex.Matches(content, @"/Type\s*/Pages\b[^>]*?/Count\s+(\d+)");
+        if (matches.Count > 0)
+        {
+            for (int i = matches.Count - 1; i >= 0; i--)
+            {
+                if (int.TryParse(matches[i].Groups[1].Value, out int count) && count > 0)
+                {
+                    return count;
+                }
+            }
+        }
+
+        return 0;
     }
 
     public async Task<List<Book>> GetBooksAsync(string? grade = null, string? subject = null, string? searchQuery = null)

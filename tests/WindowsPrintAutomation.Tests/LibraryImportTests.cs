@@ -60,6 +60,32 @@ public class LibraryImportTests : IDisposable
     }
 
     [Fact]
+    public void ExtractMetadataFromPath_FourLevelHierarchy_ParsesStageGradeSubjectTitle()
+    {
+        var root = @"C:\Books";
+        var filePath = @"C:\Books\ابتدائي\الصف الأول\اللغة العربية\كتاب الطالب.pdf";
+
+        var (grade, subject, title) = LibraryService.ExtractMetadataFromPath(root, filePath);
+
+        Assert.Equal("ابتدائي - الصف الأول", grade);
+        Assert.Equal("اللغة العربية", subject);
+        Assert.Equal("كتاب الطالب", title);
+    }
+
+    [Fact]
+    public void ExtractMetadataFromPath_FourLevelHierarchyWithStageAlreadyInGrade_DoesNotDuplicateStage()
+    {
+        var root = @"C:\Books";
+        var filePath = @"C:\Books\ثانوي\الصف الأول الثانوي\اللغة العربية\كتاب الطالب.pdf";
+
+        var (grade, subject, title) = LibraryService.ExtractMetadataFromPath(root, filePath);
+
+        Assert.Equal("الصف الأول الثانوي", grade);
+        Assert.Equal("اللغة العربية", subject);
+        Assert.Equal("كتاب الطالب", title);
+    }
+
+    [Fact]
     public async Task ImportFolderAsync_NestedHierarchy_ImportsBooksAndExtractsPages()
     {
         // Setup folder structure
